@@ -1,11 +1,26 @@
 <template>
   <div>
-    <van-nav-bar title="充值记录" left-arrow @click-left="$router.back()" />
-    <van-list v-model:loading="loading" :finished="finished" @load="onLoad">
-      <van-cell-group v-for="item in records" :key="item.id" inset style="margin: 8px 16px">
-        <van-cell :title="item.username" :label="item.created_at" :value="`${item.amount}元`" />
-      </van-cell-group>
-    </van-list>
+    <h2 style="margin-bottom: 24px">充值记录</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>用户名</th>
+          <th>充值金额</th>
+          <th>获得积分</th>
+          <th>时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in records" :key="item.id">
+          <td>{{ item.id }}</td>
+          <td>{{ item.username }}</td>
+          <td>{{ item.amount }}元</td>
+          <td>{{ item.points }}</td>
+          <td>{{ item.created_at }}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </template>
 
@@ -14,15 +29,38 @@ import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 
 const records = ref<any[]>([])
-const loading = ref(false)
-const finished = ref(false)
 
 async function onLoad() {
   const res = await api.admin.getRecharges()
   records.value = res
-  loading.value = false
-  finished.value = true
 }
 
 onMounted(onLoad)
 </script>
+
+<style scoped>
+.data-table {
+  width: 100%;
+  background: #fff;
+  border-radius: 4px;
+  border-collapse: collapse;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.data-table th,
+.data-table td {
+  padding: 16px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.data-table th {
+  background: #fafafa;
+  color: rgba(0, 0, 0, 0.85);
+  font-weight: 500;
+}
+
+.data-table tbody tr:hover {
+  background: #fafafa;
+}
+</style>
