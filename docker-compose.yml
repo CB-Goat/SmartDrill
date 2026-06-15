@@ -24,7 +24,7 @@ services:
     container_name: smartdrill-frontend
     restart: always
     ports:
-      - "3000:80"
+      - "10080:80"
     volumes:
       - ./frontend:/app
     depends_on:
