@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smartdrill-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - uploads-data:/app/uploads
+    environment:
+      - DATABASE_URL=mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:3306/${DB_NAME}
+      - SECRET_KEY=${SECRET_KEY}
+    networks:
+      - smartdrill-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smartdrill-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - backend
+    networks:
+      - smartdrill-network
+
+networks:
+  smartdrill-network:
+    external: true
+
+volumes:
+  uploads-data:

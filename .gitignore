@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.arts/
+.codeartsdoer/
+__pycache__/
+*.pyc
+.env
+*.log
+.DS_Store
+uploads/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
