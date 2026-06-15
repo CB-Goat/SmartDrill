@@ -7,7 +7,7 @@ services:
     container_name: smartdrill-backend
     restart: always
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./backend:/app
       - uploads-data:/app/uploads
