@@ -2,18 +2,21 @@
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px">
       <h2 style="margin: 0">科目管理</h2>
-      <button class="btn-primary" @click="showForm = true">添加科目</button>
+      <button class="btn-primary" @click="openAdd">添加科目</button>
     </div>
     <div class="filter-bar">
+      <select v-model="filterVersionId" @change="onVersionChange">
+        <option v-for="v in versions" :key="v.id" :value="v.id">{{ v.name }}</option>
+      </select>
       <select v-model="filterGradeId" @change="onLoad">
-        <option :value="null">全部年级</option>
-        <option v-for="g in grades" :key="g.id" :value="g.id">{{ g.name }}</option>
+        <option v-for="g in filteredGrades" :key="g.id" :value="g.id">{{ g.name }}</option>
       </select>
     </div>
     <table class="data-table">
       <thead>
         <tr>
           <th>ID</th>
+          <th>版本</th>
           <th>年级</th>
           <th>科目名称</th>
           <th>学期数</th>
@@ -23,6 +26,7 @@
       <tbody>
         <tr v-for="item in items" :key="item.id">
           <td>{{ item.id }}</td>
+          <td>{{ getVersionName(item.grade_id) }}</td>
           <td>{{ getGradeName(item.grade_id) }}</td>
           <td>{{ item.name }}</td>
           <td>{{ item.semesters?.length || 0 }}</td>
@@ -39,7 +43,7 @@
           <div class="form-item">
             <label>年级</label>
             <select v-model="form.grade_id" required>
-              <option v-for="g in grades" :key="g.id" :value="g.id">{{ g.name }}</option>
+              <option v-for="g in filteredGrades" :key="g.id" :value="g.id">{{ g.name }}</option>
             </select>
           </div>
           <div class="form-item">
@@ -57,23 +61,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '@/api'
 
 const items = ref<any[]>([])
+const versions = ref<any[]>([])
 const grades = ref<any[]>([])
 const showForm = ref(false)
-const filterGradeId = ref<number | null>(null)
+const filterVersionId = ref(1)
+const filterGradeId = ref(1)
 const form = reactive({ id: 0, grade_id: 1, name: '' })
 
+const filteredGrades = computed(() => {
+  return grades.value.filter(g => g.version_id === filterVersionId.value)
+})
+
 async function onLoad() {
+  versions.value = await api.admin.getVersions()
   grades.value = await api.admin.getGrades()
-  items.value = await api.admin.getSubjects(filterGradeId.value || undefined)
+  if (filteredGrades.value.length > 0 && !filteredGrades.value.find(g => g.id === filterGradeId.value)) {
+    filterGradeId.value = filteredGrades.value[0].id
+  }
+  items.value = await api.admin.getSubjects(filterGradeId.value)
+}
+
+function onVersionChange() {
+  if (filteredGrades.value.length > 0) {
+    filterGradeId.value = filteredGrades.value[0].id
+  }
+  onLoad()
+}
+
+function getVersionName(gradeId: number) {
+  const g = grades.value.find(x => x.id === gradeId)
+  if (g) {
+    const v = versions.value.find(x => x.id === g.version_id)
+    return v?.name || ''
+  }
+  return ''
 }
 
 function getGradeName(gradeId: number) {
   const g = grades.value.find(x => x.id === gradeId)
   return g?.name || ''
+}
+
+function openAdd() {
+  Object.assign(form, { id: 0, grade_id: filterGradeId.value, name: '' })
+  showForm.value = true
 }
 
 function editItem(item: any) {
@@ -84,7 +119,6 @@ function editItem(item: any) {
 async function onSubmit() {
   await api.admin.saveSubject(form)
   showForm.value = false
-  Object.assign(form, { id: 0, grade_id: 1, name: '' })
   onLoad()
 }
 
@@ -95,6 +129,8 @@ onMounted(onLoad)
 <style scoped>
 .filter-bar {
   margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
 }
 .filter-bar select {
   padding: 8px 12px;

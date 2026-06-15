@@ -2,18 +2,25 @@
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px">
       <h2 style="margin: 0">学期管理</h2>
-      <button class="btn-primary" @click="showForm = true">添加学期</button>
+      <button class="btn-primary" @click="openAdd">添加学期</button>
     </div>
     <div class="filter-bar">
+      <select v-model="filterVersionId" @change="onVersionChange">
+        <option v-for="v in versions" :key="v.id" :value="v.id">{{ v.name }}</option>
+      </select>
+      <select v-model="filterGradeId" @change="onGradeChange">
+        <option v-for="g in filteredGrades" :key="g.id" :value="g.id">{{ g.name }}</option>
+      </select>
       <select v-model="filterSubjectId" @change="onLoad">
-        <option :value="null">全部科目</option>
-        <option v-for="s in subjects" :key="s.id" :value="s.id">{{ s.name }}</option>
+        <option v-for="s in filteredSubjects" :key="s.id" :value="s.id">{{ s.name }}</option>
       </select>
     </div>
     <table class="data-table">
       <thead>
         <tr>
           <th>ID</th>
+          <th>版本</th>
+          <th>年级</th>
           <th>科目</th>
           <th>学期名称</th>
           <th>单元数</th>
@@ -23,6 +30,8 @@
       <tbody>
         <tr v-for="item in items" :key="item.id">
           <td>{{ item.id }}</td>
+          <td>{{ getVersionName(item.subject_id) }}</td>
+          <td>{{ getGradeName(item.subject_id) }}</td>
           <td>{{ getSubjectName(item.subject_id) }}</td>
           <td>{{ item.name }}</td>
           <td>{{ item.units?.length || 0 }}</td>
@@ -39,7 +48,7 @@
           <div class="form-item">
             <label>科目</label>
             <select v-model="form.subject_id" required>
-              <option v-for="s in subjects" :key="s.id" :value="s.id">{{ s.name }}</option>
+              <option v-for="s in filteredSubjects" :key="s.id" :value="s.id">{{ s.name }}</option>
             </select>
           </div>
           <div class="form-item">
@@ -57,23 +66,85 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '@/api'
 
 const items = ref<any[]>([])
+const versions = ref<any[]>([])
+const grades = ref<any[]>([])
 const subjects = ref<any[]>([])
 const showForm = ref(false)
-const filterSubjectId = ref<number | null>(null)
+const filterVersionId = ref(1)
+const filterGradeId = ref(1)
+const filterSubjectId = ref(1)
 const form = reactive({ id: 0, subject_id: 1, name: '' })
 
+const filteredGrades = computed(() => {
+  return grades.value.filter(g => g.version_id === filterVersionId.value)
+})
+
+const filteredSubjects = computed(() => {
+  return subjects.value.filter(s => s.grade_id === filterGradeId.value)
+})
+
 async function onLoad() {
+  versions.value = await api.admin.getVersions()
+  grades.value = await api.admin.getGrades()
   subjects.value = await api.admin.getSubjects()
-  items.value = await api.admin.getSemesters(filterSubjectId.value || undefined)
+  
+  if (filteredGrades.value.length > 0 && !filteredGrades.value.find(g => g.id === filterGradeId.value)) {
+    filterGradeId.value = filteredGrades.value[0].id
+  }
+  if (filteredSubjects.value.length > 0 && !filteredSubjects.value.find(s => s.id === filterSubjectId.value)) {
+    filterSubjectId.value = filteredSubjects.value[0].id
+  }
+  
+  items.value = await api.admin.getSemesters(filterSubjectId.value)
+}
+
+function onVersionChange() {
+  if (filteredGrades.value.length > 0) {
+    filterGradeId.value = filteredGrades.value[0].id
+  }
+  onGradeChange()
+}
+
+function onGradeChange() {
+  if (filteredSubjects.value.length > 0) {
+    filterSubjectId.value = filteredSubjects.value[0].id
+  }
+  onLoad()
+}
+
+function getVersionName(subjectId: number) {
+  const s = subjects.value.find(x => x.id === subjectId)
+  if (s) {
+    const g = grades.value.find(x => x.id === s.grade_id)
+    if (g) {
+      const v = versions.value.find(x => x.id === g.version_id)
+      return v?.name || ''
+    }
+  }
+  return ''
+}
+
+function getGradeName(subjectId: number) {
+  const s = subjects.value.find(x => x.id === subjectId)
+  if (s) {
+    const g = grades.value.find(x => x.id === s.grade_id)
+    return g?.name || ''
+  }
+  return ''
 }
 
 function getSubjectName(subjectId: number) {
   const s = subjects.value.find(x => x.id === subjectId)
   return s?.name || ''
+}
+
+function openAdd() {
+  Object.assign(form, { id: 0, subject_id: filterSubjectId.value, name: '' })
+  showForm.value = true
 }
 
 function editItem(item: any) {
@@ -84,7 +155,6 @@ function editItem(item: any) {
 async function onSubmit() {
   await api.admin.saveSemester(form)
   showForm.value = false
-  Object.assign(form, { id: 0, subject_id: 1, name: '' })
   onLoad()
 }
 
@@ -95,6 +165,8 @@ onMounted(onLoad)
 <style scoped>
 .filter-bar {
   margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
 }
 .filter-bar select {
   padding: 8px 12px;
