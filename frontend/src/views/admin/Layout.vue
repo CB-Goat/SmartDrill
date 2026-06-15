@@ -7,7 +7,17 @@
         <router-link to="/admin/users" class="menu-item" active-class="active">用户管理</router-link>
         <router-link to="/admin/recharges" class="menu-item" active-class="active">充值记录</router-link>
         <router-link to="/admin/orders" class="menu-item" active-class="active">订单管理</router-link>
+        <div class="menu-divider"></div>
+        <div class="menu-group">教材结构</div>
+        <router-link to="/admin/versions" class="menu-item" active-class="active">版本管理</router-link>
+        <router-link to="/admin/grades" class="menu-item" active-class="active">年级管理</router-link>
+        <router-link to="/admin/subjects" class="menu-item" active-class="active">科目管理</router-link>
+        <router-link to="/admin/semesters" class="menu-item" active-class="active">学期管理</router-link>
+        <router-link to="/admin/units" class="menu-item" active-class="active">单元管理</router-link>
+        <div class="menu-divider"></div>
+        <div class="menu-group">内容管理</div>
         <router-link to="/admin/knowledge" class="menu-item" active-class="active">知识点管理</router-link>
+        <router-link to="/admin/exam-points" class="menu-item" active-class="active">考点管理</router-link>
         <router-link to="/admin/questions" class="menu-item" active-class="active">题库管理</router-link>
       </div>
       <div class="admin-footer">
@@ -67,6 +77,18 @@
 .menu-item.active {
   color: #fff;
   background: #1890ff;
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 8px 24px;
+}
+
+.menu-group {
+  padding: 8px 24px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
 }
 
 .admin-footer {

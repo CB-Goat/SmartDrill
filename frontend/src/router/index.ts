@@ -44,7 +44,13 @@ const routes = [
       { path: 'users', component: () => import('@/views/admin/Users.vue') },
       { path: 'recharges', component: () => import('@/views/admin/Recharges.vue') },
       { path: 'orders', component: () => import('@/views/admin/Orders.vue') },
+      { path: 'versions', component: () => import('@/views/admin/Versions.vue') },
+      { path: 'grades', component: () => import('@/views/admin/Grades.vue') },
+      { path: 'subjects', component: () => import('@/views/admin/Subjects.vue') },
+      { path: 'semesters', component: () => import('@/views/admin/Semesters.vue') },
+      { path: 'units', component: () => import('@/views/admin/Units.vue') },
       { path: 'knowledge', component: () => import('@/views/admin/Knowledge.vue') },
+      { path: 'exam-points', component: () => import('@/views/admin/ExamPoints.vue') },
       { path: 'questions', component: () => import('@/views/admin/Questions.vue') }
     ]
   }

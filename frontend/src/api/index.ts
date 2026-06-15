@@ -68,9 +68,26 @@ export const api = {
     updateUser: (id: number, data: any) => request.put(`/admin/users/${id}`, data),
     getRecharges: () => request.get('/admin/recharges'),
     getOrders: () => request.get('/admin/orders'),
-    getKnowledge: () => request.get('/admin/knowledge'),
+    
+    getVersions: () => request.get('/admin/versions'),
+    saveVersion: (data: any) => request.post('/admin/versions', data),
+    getGrades: (versionId?: number) => request.get('/admin/grades', { params: { version_id: versionId } }),
+    saveGrade: (data: any) => request.post('/admin/grades', data),
+    getSubjects: (gradeId?: number) => request.get('/admin/subjects', { params: { grade_id: gradeId } }),
+    saveSubject: (data: any) => request.post('/admin/subjects', data),
+    getSemesters: (subjectId?: number) => request.get('/admin/semesters', { params: { subject_id: subjectId } }),
+    saveSemester: (data: any) => request.post('/admin/semesters', data),
+    getUnits: (semesterId?: number) => request.get('/admin/units', { params: { semester_id: semesterId } }),
+    saveUnit: (data: any) => request.post('/admin/units', data),
+    
+    getKnowledge: (unitId?: number) => request.get('/admin/knowledge', { params: { unit_id: unitId } }),
     saveKnowledge: (data: any) => request.post('/admin/knowledge', data),
-    getQuestions: () => request.get('/admin/questions'),
+    getExamPoints: (knowledgePointId?: number) => request.get('/admin/exam-points', { params: { knowledge_point_id: knowledgePointId } }),
+    saveExamPoint: (data: any) => request.post('/admin/exam-points', data),
+    
+    getQuestionTypes: () => request.get('/admin/question-types'),
+    getDifficulties: () => request.get('/admin/difficulties'),
+    getQuestions: (unitId?: number) => request.get('/admin/questions', { params: { unit_id: unitId } }),
     saveQuestion: (data: any) => request.post('/admin/questions', data)
   }
 }
