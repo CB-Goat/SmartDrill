@@ -240,17 +240,18 @@ async def import_knowledge_exam_points(
                 
                 if not existing_ep:
                     exam_title = exam_content.split('\n')[0][:50] if '\n' in exam_content else exam_content[:50]
+                    freq = '必考' if exam_frequency in ['必考', '必考重点'] else ('常考' if exam_frequency == '常考' else '少考')
                     ep = ExamPoint(
                         knowledge_point_id=kp.id,
                         title=exam_title,
                         content=exam_content,
                         exam_types=exam_types,
-                        exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考', '必考重点'] else '常考'
+                        exam_frequency=freq
                     )
                     db.add(ep)
                     db.commit()
                     imported_count += 1
-                    import_log.append(f"  ✓ 行{row_idx}: {exam_title[:30]} ({exam_frequency})")
+                    import_log.append(f"  ✓ 行{row_idx}: {exam_title[:30]} ({freq})")
                 else:
                     duplicate_count += 1
                     import_log.append(f"  - 行{row_idx}: 重复考点")
