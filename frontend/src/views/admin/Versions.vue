@@ -20,6 +20,7 @@
           <td>{{ item.grades?.length || 0 }}</td>
           <td>
             <button class="btn-link" @click="editItem(item)">编辑</button>
+            <button class="btn-link" style="color: #f56c6c; margin-left: 8px" @click="deleteItem(item)">删除</button>
           </td>
         </tr>
       </tbody>
@@ -63,6 +64,12 @@ async function onSubmit() {
   await api.admin.saveVersion(form)
   showForm.value = false
   Object.assign(form, { id: 0, name: '' })
+  onLoad()
+}
+
+async function deleteItem(item: any) {
+  if (!confirm(`确定删除版本"${item.name}"吗？`)) return
+  await api.admin.deleteVersion(item.id)
   onLoad()
 }
 

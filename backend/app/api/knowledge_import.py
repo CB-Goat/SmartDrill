@@ -199,5 +199,7 @@ async def import_knowledge_exam_points(
                     db.commit()
                 
                 imported_count += 1
+            else:
+                print(f"跳过空知识点: {grade_name} - {subject_name} - {unit_name}")
     
     return {"message": f"导入成功，共导入{imported_count}条数据"}

@@ -32,6 +32,7 @@
           <td>{{ item.semesters?.length || 0 }}</td>
           <td>
             <button class="btn-link" @click="editItem(item)">编辑</button>
+            <button class="btn-link" style="color: #f56c6c; margin-left: 8px" @click="deleteItem(item)">删除</button>
           </td>
         </tr>
       </tbody>
@@ -119,6 +120,12 @@ function editItem(item: any) {
 async function onSubmit() {
   await api.admin.saveSubject(form)
   showForm.value = false
+  onLoad()
+}
+
+async function deleteItem(item: any) {
+  if (!confirm(`确定删除科目"${item.name}"吗？`)) return
+  await api.admin.deleteSubject(item.id)
   onLoad()
 }
 

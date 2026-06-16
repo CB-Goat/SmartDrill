@@ -28,6 +28,7 @@
           <td>{{ item.subjects?.length || 0 }}</td>
           <td>
             <button class="btn-link" @click="editItem(item)">编辑</button>
+            <button class="btn-link" style="color: #f56c6c; margin-left: 8px" @click="deleteItem(item)">删除</button>
           </td>
         </tr>
       </tbody>
@@ -85,6 +86,12 @@ async function onSubmit() {
   await api.admin.saveGrade(form)
   showForm.value = false
   Object.assign(form, { id: 0, version_id: 1, name: '' })
+  onLoad()
+}
+
+async function deleteItem(item: any) {
+  if (!confirm(`确定删除年级"${item.name}"吗？`)) return
+  await api.admin.deleteGrade(item.id)
   onLoad()
 }
 

@@ -37,6 +37,15 @@ def save_version(data: dict, admin: User = Depends(get_current_admin), db: Sessi
     db.refresh(v)
     return {"id": v.id, "name": v.name}
 
+@router.delete("/versions/{id}")
+def delete_version(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    v = db.query(Version).filter(Version.id == id).first()
+    if not v:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    db.delete(v)
+    db.commit()
+    return {"message": "删除成功"}
+
 @router.get("/grades")
 def get_grades(version_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     query = db.query(Grade)
@@ -51,6 +60,15 @@ def save_grade(data: dict, admin: User = Depends(get_current_admin), db: Session
     db.commit()
     db.refresh(g)
     return {"id": g.id, "name": g.name, "version_id": g.version_id}
+
+@router.delete("/grades/{id}")
+def delete_grade(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    g = db.query(Grade).filter(Grade.id == id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    db.delete(g)
+    db.commit()
+    return {"message": "删除成功"}
 
 @router.get("/subjects")
 def get_subjects(grade_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -67,6 +85,15 @@ def save_subject(data: dict, admin: User = Depends(get_current_admin), db: Sessi
     db.refresh(s)
     return {"id": s.id, "name": s.name, "grade_id": s.grade_id}
 
+@router.delete("/subjects/{id}")
+def delete_subject(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    s = db.query(Subject).filter(Subject.id == id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    db.delete(s)
+    db.commit()
+    return {"message": "删除成功"}
+
 @router.get("/semesters")
 def get_semesters(subject_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     query = db.query(Semester)
@@ -82,6 +109,15 @@ def save_semester(data: dict, admin: User = Depends(get_current_admin), db: Sess
     db.refresh(s)
     return {"id": s.id, "name": s.name, "subject_id": s.subject_id}
 
+@router.delete("/semesters/{id}")
+def delete_semester(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    s = db.query(Semester).filter(Semester.id == id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    db.delete(s)
+    db.commit()
+    return {"message": "删除成功"}
+
 @router.get("/units")
 def get_units(semester_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     query = db.query(Unit)
@@ -96,6 +132,15 @@ def save_unit(data: dict, admin: User = Depends(get_current_admin), db: Session 
     db.commit()
     db.refresh(u)
     return {"id": u.id, "name": u.name, "semester_id": u.semester_id}
+
+@router.delete("/units/{id}")
+def delete_unit(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    u = db.query(Unit).filter(Unit.id == id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    db.delete(u)
+    db.commit()
+    return {"message": "删除成功"}
 
 @router.get("/knowledge")
 def get_knowledge(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
