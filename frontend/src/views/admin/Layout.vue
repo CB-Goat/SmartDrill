@@ -16,8 +16,7 @@
         <router-link to="/admin/units" class="menu-item" active-class="active">单元管理</router-link>
         <div class="menu-divider"></div>
         <div class="menu-group">内容管理</div>
-        <router-link to="/admin/knowledge" class="menu-item" active-class="active">知识点管理</router-link>
-        <router-link to="/admin/exam-points" class="menu-item" active-class="active">考点管理</router-link>
+        <router-link to="/admin/knowledge-exam-points" class="menu-item" active-class="active">知识考点管理</router-link>
         <router-link to="/admin/questions" class="menu-item" active-class="active">题库管理</router-link>
       </div>
       <div class="admin-footer">

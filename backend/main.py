@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, user, subjects, materials, admin, admin_auth
+from app.api import auth, user, subjects, materials, admin, admin_auth, knowledge_import
 from app.database import engine, Base
 import os
 
@@ -22,6 +22,7 @@ app.include_router(subjects.router, prefix="/api")
 app.include_router(materials.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(admin_auth.router, prefix="/api")
+app.include_router(knowledge_import.router, prefix="/api")
 
 @app.get("/")
 def root():

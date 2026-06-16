@@ -112,6 +112,9 @@ export const api = {
     getExamPoints: (knowledgePointId?: number) => adminRequest.get('/admin/exam-points', { params: { knowledge_point_id: knowledgePointId } }),
     saveExamPoint: (data: any) => adminRequest.post('/admin/exam-points', data),
     
+    getKnowledgeExamPoints: (unitId?: number) => adminRequest.get('/admin/knowledge-exam-points', { params: { unit_id: unitId } }),
+    saveKnowledgeExamPoint: (data: any) => adminRequest.post('/admin/knowledge-exam-points', data),
+    
     getQuestionTypes: () => adminRequest.get('/admin/question-types'),
     getDifficulties: () => adminRequest.get('/admin/difficulties'),
     getQuestions: (unitId?: number) => adminRequest.get('/admin/questions', { params: { unit_id: unitId } }),

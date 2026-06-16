@@ -53,8 +53,7 @@ const routes = [
       { path: 'subjects', component: () => import('@/views/admin/Subjects.vue') },
       { path: 'semesters', component: () => import('@/views/admin/Semesters.vue') },
       { path: 'units', component: () => import('@/views/admin/Units.vue') },
-      { path: 'knowledge', component: () => import('@/views/admin/Knowledge.vue') },
-      { path: 'exam-points', component: () => import('@/views/admin/ExamPoints.vue') },
+      { path: 'knowledge-exam-points', component: () => import('@/views/admin/KnowledgeExamPoints.vue') },
       { path: 'questions', component: () => import('@/views/admin/Questions.vue') }
     ]
   }
