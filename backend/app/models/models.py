@@ -63,7 +63,7 @@ class Version(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    grades = relationship("Grade", back_populates="version")
+    grades = relationship("Grade", back_populates="version", cascade="all, delete-orphan")
 
 class Grade(Base):
     __tablename__ = "grades"
@@ -78,37 +78,37 @@ class Subject(Base):
     __tablename__ = "subjects"
     
     id = Column(Integer, primary_key=True, index=True)
-    grade_id = Column(Integer, ForeignKey("grades.id"), nullable=False)
+    grade_id = Column(Integer, ForeignKey("grades.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), nullable=False)
-    semesters = relationship("Semester", back_populates="subject")
+    semesters = relationship("Semester", back_populates="subject", cascade="all, delete-orphan")
     grade = relationship("Grade", back_populates="subjects")
 
 class Semester(Base):
     __tablename__ = "semesters"
     
     id = Column(Integer, primary_key=True, index=True)
-    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), nullable=False)
-    units = relationship("Unit", back_populates="semester")
+    units = relationship("Unit", back_populates="semester", cascade="all, delete-orphan")
     subject = relationship("Subject", back_populates="semesters")
 
 class Unit(Base):
     __tablename__ = "units"
     
     id = Column(Integer, primary_key=True, index=True)
-    semester_id = Column(Integer, ForeignKey("semesters.id"), nullable=False)
+    semester_id = Column(Integer, ForeignKey("semesters.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), nullable=False)
-    knowledge_points = relationship("KnowledgePoint", back_populates="unit")
+    knowledge_points = relationship("KnowledgePoint", back_populates="unit", cascade="all, delete-orphan")
     semester = relationship("Semester", back_populates="units")
 
 class KnowledgePoint(Base):
     __tablename__ = "knowledge_points"
     
     id = Column(Integer, primary_key=True, index=True)
-    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     content = Column(Text)
-    exam_points = relationship("ExamPoint", back_populates="knowledge_point")
+    exam_points = relationship("ExamPoint", back_populates="knowledge_point", cascade="all, delete-orphan")
     unit = relationship("Unit", back_populates="knowledge_points")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -116,12 +116,12 @@ class ExamPoint(Base):
     __tablename__ = "exam_points"
     
     id = Column(Integer, primary_key=True, index=True)
-    knowledge_point_id = Column(Integer, ForeignKey("knowledge_points.id"), nullable=False)
+    knowledge_point_id = Column(Integer, ForeignKey("knowledge_points.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     content = Column(Text)
     exam_types = Column(String(255))
     exam_frequency = Column(Enum(ExamFrequency), default=ExamFrequency.often)
-    questions = relationship("Question", back_populates="exam_point")
+    questions = relationship("Question", back_populates="exam_point", cascade="all, delete-orphan")
     knowledge_point = relationship("KnowledgePoint", back_populates="exam_points")
     created_at = Column(DateTime, default=datetime.utcnow)
 
