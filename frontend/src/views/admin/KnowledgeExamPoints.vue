@@ -29,22 +29,28 @@
       </select>
     </div>
     
-    <div v-for="item in items" :key="item.id" class="knowledge-card">
-      <div class="knowledge-header">
-        <h3>{{ item.title }}</h3>
-        <button class="btn-link" @click="editItem(item)">编辑</button>
-      </div>
-      <div class="knowledge-content">{{ item.content }}</div>
-      <div v-if="item.exam_points && item.exam_points.length > 0" class="exam-points">
-        <div class="exam-points-title">考点列表：</div>
-        <div v-for="ep in item.exam_points" :key="ep.id" class="exam-point-item">
-          <div class="exam-point-header">
-            <span class="exam-point-title">{{ ep.title }}</span>
-            <span class="exam-point-badge" :class="'freq-' + ep.exam_frequency">{{ ep.exam_frequency }}</span>
-          </div>
-          <div class="exam-point-content">{{ ep.content }}</div>
-          <div v-if="ep.exam_types" class="exam-point-types">题型：{{ ep.exam_types }}</div>
+    <div v-for="item in items" :key="item.id" class="knowledge-layout">
+      <div class="knowledge-left">
+        <div class="knowledge-header">
+          <h3>{{ item.title }}</h3>
+          <button class="btn-link" @click="editItem(item)">编辑</button>
         </div>
+        <div class="knowledge-content">{{ item.content }}</div>
+      </div>
+      
+      <div class="knowledge-right">
+        <div class="exam-points-title">考点列表</div>
+        <div v-if="item.exam_points && item.exam_points.length > 0" class="exam-points">
+          <div v-for="ep in item.exam_points" :key="ep.id" class="exam-point-item">
+            <div class="exam-point-header">
+              <span class="exam-point-title">{{ ep.title }}</span>
+              <span class="exam-point-badge" :class="'freq-' + ep.exam_frequency">{{ ep.exam_frequency }}</span>
+            </div>
+            <div class="exam-point-content">{{ ep.content }}</div>
+            <div v-if="ep.exam_types" class="exam-point-types">题型：{{ ep.exam_types }}</div>
+          </div>
+        </div>
+        <div v-else class="no-exam-points">暂无考点</div>
       </div>
     </div>
     
@@ -305,12 +311,25 @@ onMounted(onLoad)
   min-width: 150px;
 }
 
-.knowledge-card {
+.knowledge-layout {
+  display: flex;
+  gap: 20px;
   background: #fff;
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.knowledge-left {
+  flex: 2;
+  border-right: 1px solid #e8e8e8;
+  padding-right: 20px;
+}
+
+.knowledge-right {
+  flex: 1;
+  min-width: 300px;
 }
 
 .knowledge-header {
@@ -327,26 +346,28 @@ onMounted(onLoad)
 
 .knowledge-content {
   color: #666;
-  margin-bottom: 16px;
   white-space: pre-wrap;
-}
-
-.exam-points {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 16px;
+  line-height: 1.8;
 }
 
 .exam-points-title {
   font-weight: bold;
   margin-bottom: 12px;
-  color: #333;
+  color: #f5222d;
+  font-size: 16px;
+}
+
+.exam-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .exam-point-item {
   background: #fafafa;
   padding: 12px;
   border-radius: 4px;
-  margin-bottom: 8px;
+  border-left: 3px solid #1890ff;
 }
 
 .exam-point-header {
@@ -359,6 +380,7 @@ onMounted(onLoad)
 .exam-point-title {
   font-weight: 500;
   color: #333;
+  font-size: 14px;
 }
 
 .exam-point-badge {
@@ -386,11 +408,19 @@ onMounted(onLoad)
   color: #666;
   margin-bottom: 8px;
   white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .exam-point-types {
   color: #999;
   font-size: 12px;
+}
+
+.no-exam-points {
+  color: #999;
+  text-align: center;
+  padding: 20px;
 }
 
 .import-tips {
