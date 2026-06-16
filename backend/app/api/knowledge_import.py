@@ -206,16 +206,41 @@ async def import_knowledge_exam_points(
                 db.commit()
             
             if exam_content:
-                exam_title = exam_content.split('\n')[0][:50] if '\n' in exam_content else exam_content[:50]
-                ep = ExamPoint(
-                    knowledge_point_id=kp.id,
-                    title=exam_title,
-                    content=exam_content,
-                    exam_types=exam_types,
-                    exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考'] else '常考'
-                )
-                db.add(ep)
-                db.commit()
-                imported_count += 1
+                existing_ep = db.query(ExamPoint).filter(
+                    ExamPoint.knowledge_point_id == kp.id,
+                    ExamPoint.content == exam_content
+                ).first()
+                
+                if not existing_ep:
+                    exam_title = exam_content.split('\n')[0][:50] if '\n' in exam_content else exam_content[:50]
+                    ep = ExamPoint(
+                        knowledge_point_id=kp.id,
+                        title=exam_title,
+                        content=exam_content,
+                        exam_types=exam_types,
+                        exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考'] else '常考'
+                    )
+                    db.add(ep)
+                    db.commit()
+                    imported_count += 1
     
     return {"message": f"导入成功，共导入{imported_count}个考点"}
+
+@router.post("/clean-duplicate-exam-points")
+def clean_duplicate_exam_points(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    all_kps = db.query(KnowledgePoint).all()
+    deleted_count = 0
+    
+    for kp in all_kps:
+        exam_points = db.query(ExamPoint).filter(ExamPoint.knowledge_point_id == kp.id).all()
+        
+        seen_contents = set()
+        for ep in exam_points:
+            if ep.content in seen_contents:
+                db.delete(ep)
+                deleted_count += 1
+            else:
+                seen_contents.add(ep.content)
+    
+    db.commit()
+    return {"message": f"清理完成，删除了{deleted_count}条重复考点"}
