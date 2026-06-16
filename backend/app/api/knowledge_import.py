@@ -7,6 +7,7 @@ from app.models.models import (
 )
 from app.utils.auth import get_current_admin
 from openpyxl import load_workbook
+from io import BytesIO
 from typing import List
 
 router = APIRouter(prefix="/admin", tags=["知识考点管理"])
@@ -100,7 +101,10 @@ async def import_knowledge_exam_points(
         raise HTTPException(status_code=400, detail="只支持Excel文件")
     
     contents = await file.read()
-    wb = load_workbook(filename=bytes(contents))
+    try:
+        wb = load_workbook(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Excel文件解析失败: {str(e)}")
     
     imported_count = 0
     
