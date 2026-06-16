@@ -239,12 +239,14 @@ async def import_knowledge_exam_points(
                 ).first()
                 
                 if not existing_ep:
-                    exam_title = exam_content.split('\n')[0][:50] if '\n' in exam_content else exam_content[:50]
+                    lines = exam_content.split('\n')
+                    exam_title = lines[0][:50] if lines else exam_content[:50]
+                    exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
                     freq = '必考' if exam_frequency in ['必考', '必考重点'] else ('常考' if exam_frequency == '常考' else '少考')
                     ep = ExamPoint(
                         knowledge_point_id=kp.id,
                         title=exam_title,
-                        content=exam_content,
+                        content=exam_content_clean,
                         exam_types=exam_types,
                         exam_frequency=freq
                     )
@@ -297,3 +299,18 @@ def delete_unit_knowledge(
         deleted_count += 1
     db.commit()
     return {"message": f"删除成功，共删除{deleted_count}个知识点及其考点"}
+
+@router.post("/clean-exam-content")
+def clean_exam_content(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    all_eps = db.query(ExamPoint).all()
+    cleaned_count = 0
+    
+    for ep in all_eps:
+        if ep.content and ep.title:
+            lines = ep.content.split('\n')
+            if lines and lines[0].strip() == ep.title.strip():
+                ep.content = '\n'.join(lines[1:])
+                cleaned_count += 1
+    
+    db.commit()
+    return {"message": f"清理完成，修复了{cleaned_count}条考点内容"}
