@@ -14,8 +14,7 @@ def get_user_info(current_user: User = Depends(get_current_user)):
         "id": current_user.id,
         "username": current_user.username,
         "phone": current_user.phone,
-        "points": current_user.points,
-        "role": current_user.role.value
+        "points": current_user.points
     }
 
 @router.post("/recharge")
