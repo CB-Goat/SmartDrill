@@ -107,7 +107,10 @@ async def import_knowledge_exam_points(
         raise HTTPException(status_code=400, detail=f"Excel文件解析失败: {str(e)}")
     
     imported_count = 0
+    skipped_count = 0
+    duplicate_count = 0
     unit_knowledge_map = {}
+    import_log = []
     
     version = db.query(Version).filter(Version.name == "人教版").first()
     if not version:
@@ -135,6 +138,7 @@ async def import_knowledge_exam_points(
             exam_frequency = str(row[7]).strip() if row[7] else '常考'
             
             if not all([grade_name, semester_name, unit_number, unit_name]):
+                skipped_count += 1
                 continue
             
             grade = db.query(Grade).filter(
@@ -223,8 +227,19 @@ async def import_knowledge_exam_points(
                     db.add(ep)
                     db.commit()
                     imported_count += 1
+                    import_log.append(f"✓ {subject_name} - {unit_name} - {exam_title[:30]}")
+                else:
+                    duplicate_count += 1
+            else:
+                import_log.append(f"✗ {subject_name} - {unit_name} - 无考点内容")
     
-    return {"message": f"导入成功，共导入{imported_count}个考点"}
+    return {
+        "message": f"导入完成",
+        "imported": imported_count,
+        "skipped": skipped_count,
+        "duplicate": duplicate_count,
+        "log": import_log[:20]
+    }
 
 @router.post("/clean-duplicate-exam-points")
 def clean_duplicate_exam_points(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):

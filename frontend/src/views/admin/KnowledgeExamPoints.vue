@@ -219,7 +219,8 @@ async function doImport() {
     })
     
     const result = await response.json()
-    alert(result.message)
+    const msg = `${result.message}\n导入: ${result.imported}个\n跳过: ${result.skipped}行\n重复: ${result.duplicate}个\n\n${result.log?.join('\n') || ''}`
+    alert(msg)
     showImport.value = false
     importFile.value = null
     onLoad()
