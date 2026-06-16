@@ -108,13 +108,17 @@ async def import_knowledge_exam_points(
     
     imported_count = 0
     
+    version = db.query(Version).filter(Version.name == "人教版").first()
+    if not version:
+        version = Version(name="人教版")
+        db.add(version)
+        db.commit()
+        db.refresh(version)
+    
     for sheet_name in wb.sheetnames:
         sheet = wb[sheet_name]
         
         subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
-        subject = db.query(Subject).filter(Subject.name == subject_name).first()
-        if not subject:
-            continue
         
         for row in sheet.iter_rows(min_row=2, values_only=True):
             if not row or not row[0]:
@@ -132,16 +136,25 @@ async def import_knowledge_exam_points(
             if not all([grade_name, semester_name, unit_number, unit_name]):
                 continue
             
-            grade = db.query(Grade).filter(Grade.name == grade_name).first()
+            grade = db.query(Grade).filter(
+                Grade.version_id == version.id,
+                Grade.name == grade_name
+            ).first()
             if not grade:
-                continue
+                grade = Grade(version_id=version.id, name=grade_name)
+                db.add(grade)
+                db.commit()
+                db.refresh(grade)
             
             subject = db.query(Subject).filter(
                 Subject.grade_id == grade.id,
-                Subject.name == sheet_name
+                Subject.name == subject_name
             ).first()
             if not subject:
-                continue
+                subject = Subject(grade_id=grade.id, name=subject_name)
+                db.add(subject)
+                db.commit()
+                db.refresh(subject)
             
             semester = db.query(Semester).filter(
                 Semester.subject_id == subject.id,
