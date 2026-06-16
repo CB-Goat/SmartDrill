@@ -69,9 +69,9 @@ class Grade(Base):
     __tablename__ = "grades"
     
     id = Column(Integer, primary_key=True, index=True)
-    version_id = Column(Integer, ForeignKey("versions.id"), nullable=False)
+    version_id = Column(Integer, ForeignKey("versions.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(50), nullable=False)
-    subjects = relationship("Subject", back_populates="grade")
+    subjects = relationship("Subject", back_populates="grade", cascade="all, delete-orphan")
     version = relationship("Version", back_populates="grades")
 
 class Subject(Base):

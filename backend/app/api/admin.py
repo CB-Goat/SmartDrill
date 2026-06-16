@@ -31,11 +31,15 @@ def get_versions(admin: User = Depends(get_current_admin), db: Session = Depends
 
 @router.post("/versions")
 def save_version(data: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    v = Version(**data)
-    db.add(v)
-    db.commit()
-    db.refresh(v)
-    return {"id": v.id, "name": v.name}
+    try:
+        v = Version(name=data.get('name', ''))
+        db.add(v)
+        db.commit()
+        db.refresh(v)
+        return {"id": v.id, "name": v.name}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"创建版本失败: {str(e)}")
 
 @router.delete("/versions/{id}")
 def delete_version(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
