@@ -177,7 +177,7 @@ async def import_knowledge_exam_points(
                 db.commit()
                 db.refresh(unit)
             
-            unit_key = f"{grade_name}-{semester_name}-{unit_number}"
+            unit_key = f"{grade_name}-{subject_name}-{semester_name}-{unit_number}"
             
             if unit_key not in unit_knowledge_map:
                 kp = db.query(KnowledgePoint).filter(
@@ -244,3 +244,18 @@ def clean_duplicate_exam_points(admin: User = Depends(get_current_admin), db: Se
     
     db.commit()
     return {"message": f"清理完成，删除了{deleted_count}条重复考点"}
+
+@router.delete("/unit-knowledge/{unit_id}")
+def delete_unit_knowledge(
+    unit_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    kps = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).all()
+    deleted_count = 0
+    for kp in kps:
+        db.query(ExamPoint).filter(ExamPoint.knowledge_point_id == kp.id).delete()
+        db.delete(kp)
+        deleted_count += 1
+    db.commit()
+    return {"message": f"删除成功，共删除{deleted_count}个知识点及其考点"}
