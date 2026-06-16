@@ -5,6 +5,7 @@
       <div>
         <button class="btn-default" @click="showImport = true" style="margin-right: 8px">Excel导入</button>
         <button class="btn-default" @click="cleanDuplicates" style="margin-right: 8px">清理重复</button>
+        <button class="btn-default" @click="cleanContent" style="margin-right: 8px">清理内容</button>
         <button class="btn-default" @click="deleteUnitKnowledge" style="margin-right: 8px; color: #f56c6c">删除当前单元</button>
         <button class="btn-primary" @click="openAdd">添加知识考点</button>
       </div>
@@ -264,6 +265,25 @@ async function deleteUnitKnowledge() {
     onLoad()
   } catch (error) {
     alert('删除失败')
+  }
+}
+
+async function cleanContent() {
+  if (!confirm('确定清理考点内容中的重复标题吗？')) return
+  
+  try {
+    const response = await fetch('/api/admin/clean-exam-content', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+      }
+    })
+    
+    const result = await response.json()
+    alert(result.message)
+    onLoad()
+  } catch (error) {
+    alert('清理失败')
   }
 }
 
