@@ -107,6 +107,7 @@ async def import_knowledge_exam_points(
         raise HTTPException(status_code=400, detail=f"Excel文件解析失败: {str(e)}")
     
     imported_count = 0
+    unit_knowledge_map = {}
     
     version = db.query(Version).filter(Version.name == "人教版").first()
     if not version:
@@ -176,30 +177,45 @@ async def import_knowledge_exam_points(
                 db.commit()
                 db.refresh(unit)
             
-            if knowledge_content:
-                kp_title = f"{unit_name} - 知识点"
-                kp = KnowledgePoint(
-                    unit_id=unit.id,
-                    title=kp_title,
-                    content=knowledge_content
-                )
-                db.add(kp)
-                db.commit()
-                db.refresh(kp)
+            unit_key = f"{grade_name}-{semester_name}-{unit_number}"
+            
+            if unit_key not in unit_knowledge_map:
+                kp = db.query(KnowledgePoint).filter(
+                    KnowledgePoint.unit_id == unit.id
+                ).first()
                 
-                if exam_content:
-                    ep = ExamPoint(
-                        knowledge_point_id=kp.id,
-                        title=f"{unit_name} - 考点",
-                        content=exam_content,
-                        exam_types=exam_types,
-                        exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考'] else '常考'
+                if not kp:
+                    kp = KnowledgePoint(
+                        unit_id=unit.id,
+                        title=f"{unit_name} - 知识点",
+                        content=knowledge_content or ""
                     )
-                    db.add(ep)
+                    db.add(kp)
                     db.commit()
+                    db.refresh(kp)
                 
+                unit_knowledge_map[unit_key] = kp
+            
+            kp = unit_knowledge_map[unit_key]
+            
+            if knowledge_content and kp.content != knowledge_content:
+                if kp.content:
+                    kp.content = knowledge_content
+                else:
+                    kp.content = knowledge_content
+                db.commit()
+            
+            if exam_content:
+                exam_title = exam_content.split('\n')[0][:50] if '\n' in exam_content else exam_content[:50]
+                ep = ExamPoint(
+                    knowledge_point_id=kp.id,
+                    title=exam_title,
+                    content=exam_content,
+                    exam_types=exam_types,
+                    exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考'] else '常考'
+                )
+                db.add(ep)
+                db.commit()
                 imported_count += 1
-            else:
-                print(f"跳过空知识点: {grade_name} - {subject_name} - {unit_name}")
     
-    return {"message": f"导入成功，共导入{imported_count}条数据"}
+    return {"message": f"导入成功，共导入{imported_count}个考点"}
