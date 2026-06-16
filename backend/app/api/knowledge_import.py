@@ -111,7 +111,8 @@ async def import_knowledge_exam_points(
     for sheet_name in wb.sheetnames:
         sheet = wb[sheet_name]
         
-        subject = db.query(Subject).filter(Subject.name == sheet_name).first()
+        subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
+        subject = db.query(Subject).filter(Subject.name == subject_name).first()
         if not subject:
             continue
         
