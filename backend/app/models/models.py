@@ -21,11 +21,18 @@ class User(Base):
     password = Column(String(255), nullable=False)
     phone = Column(String(20))
     points = Column(Integer, default=0)
-    role = Column(Enum(UserRole), default=UserRole.user)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     recharges = relationship("Recharge", back_populates="user")
     orders = relationship("Order", back_populates="user")
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Recharge(Base):
     __tablename__ = "recharges"

@@ -36,9 +36,13 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/admin/login',
+    component: () => import('@/views/admin/Login.vue')
+  },
+  {
     path: '/admin',
     component: () => import('@/views/admin/Layout.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAdmin: true },
     children: [
       { path: '', component: () => import('@/views/admin/Dashboard.vue') },
       { path: 'users', component: () => import('@/views/admin/Users.vue') },
@@ -62,19 +66,28 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
-  const userStore = useUserStore()
-  
-  if (userStore.token && !userStore.userInfo) {
-    await userStore.fetchUserInfo()
+  if (to.meta.requiresAdmin) {
+    const adminToken = localStorage.getItem('admin_token')
+    if (!adminToken) {
+      next('/admin/login')
+      return
+    }
   }
   
-  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
-    next('/login')
-  } else if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    next('/')
-  } else {
-    next()
+  if (to.meta.requiresAuth) {
+    const userStore = useUserStore()
+    
+    if (userStore.token && !userStore.userInfo) {
+      await userStore.fetchUserInfo()
+    }
+    
+    if (!userStore.isLoggedIn) {
+      next('/login')
+      return
+    }
   }
+  
+  next()
 })
 
 export default router

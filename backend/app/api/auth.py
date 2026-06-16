@@ -29,9 +29,9 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
     if not user or not verify_password(user_data.password, user.password):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": user.username, "type": "user"})
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserResponse(id=user.id, username=user.username, phone=user.phone, points=user.points, role=user.role.value)
+        "user": UserResponse(id=user.id, username=user.username, phone=user.phone, points=user.points)
     }

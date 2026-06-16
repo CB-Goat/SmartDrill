@@ -16,7 +16,7 @@ class UserResponse(BaseModel):
     username: str
     phone: Optional[str]
     points: int
-    role: str
+
     
     class Config:
         from_attributes = True

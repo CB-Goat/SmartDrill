@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, Base
 from app.models.models import (
-    User, Version, Grade, Subject, Semester, Unit, 
+    User, AdminUser, Version, Grade, Subject, Semester, Unit, 
     KnowledgePoint, ExamPoint, QuestionType, Difficulty, Question
 )
 from app.utils.auth import get_password_hash
-from app.models.models import UserRole, ExamFrequency
+from app.models.models import ExamFrequency
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -13,13 +13,10 @@ def init_db():
     db: Session = SessionLocal()
     
     try:
-        if not db.query(User).filter(User.username == "admin").first():
-            admin = User(
+        if not db.query(AdminUser).filter(AdminUser.username == "admin").first():
+            admin = AdminUser(
                 username="admin",
-                password=get_password_hash("admin123"),
-                phone="13800138000",
-                points=999999,
-                role=UserRole.admin
+                password=get_password_hash("admin123")
             )
             db.add(admin)
         

@@ -29,6 +29,33 @@ request.interceptors.response.use(
   }
 )
 
+const adminRequest = axios.create({
+  baseURL: '/api',
+  timeout: 10000
+})
+
+adminRequest.interceptors.request.use(config => {
+  const adminToken = localStorage.getItem('admin_token')
+  if (adminToken) {
+    config.headers.Authorization = `Bearer ${adminToken}`
+  }
+  return config
+})
+
+adminRequest.interceptors.response.use(
+  response => response.data,
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin_user')
+      window.location.href = '/admin/login'
+    } else {
+      showToast(error.response?.data?.message || '请求失败')
+    }
+    return Promise.reject(error)
+  }
+)
+
 export const api = {
   login: (username: string, password: string) =>
     request.post('/auth/login', { username, password }),
@@ -64,30 +91,30 @@ export const api = {
     request.get(`/orders/${orderId}/download`, { responseType: 'blob' }),
   
   admin: {
-    getUsers: () => request.get('/admin/users'),
-    updateUser: (id: number, data: any) => request.put(`/admin/users/${id}`, data),
-    getRecharges: () => request.get('/admin/recharges'),
-    getOrders: () => request.get('/admin/orders'),
+    getUsers: () => adminRequest.get('/admin/users'),
+    updateUser: (id: number, data: any) => adminRequest.put(`/admin/users/${id}`, data),
+    getRecharges: () => adminRequest.get('/admin/recharges'),
+    getOrders: () => adminRequest.get('/admin/orders'),
     
-    getVersions: () => request.get('/admin/versions'),
-    saveVersion: (data: any) => request.post('/admin/versions', data),
-    getGrades: (versionId?: number) => request.get('/admin/grades', { params: { version_id: versionId } }),
-    saveGrade: (data: any) => request.post('/admin/grades', data),
-    getSubjects: (gradeId?: number) => request.get('/admin/subjects', { params: { grade_id: gradeId } }),
-    saveSubject: (data: any) => request.post('/admin/subjects', data),
-    getSemesters: (subjectId?: number) => request.get('/admin/semesters', { params: { subject_id: subjectId } }),
-    saveSemester: (data: any) => request.post('/admin/semesters', data),
-    getUnits: (semesterId?: number) => request.get('/admin/units', { params: { semester_id: semesterId } }),
-    saveUnit: (data: any) => request.post('/admin/units', data),
+    getVersions: () => adminRequest.get('/admin/versions'),
+    saveVersion: (data: any) => adminRequest.post('/admin/versions', data),
+    getGrades: (versionId?: number) => adminRequest.get('/admin/grades', { params: { version_id: versionId } }),
+    saveGrade: (data: any) => adminRequest.post('/admin/grades', data),
+    getSubjects: (gradeId?: number) => adminRequest.get('/admin/subjects', { params: { grade_id: gradeId } }),
+    saveSubject: (data: any) => adminRequest.post('/admin/subjects', data),
+    getSemesters: (subjectId?: number) => adminRequest.get('/admin/semesters', { params: { subject_id: subjectId } }),
+    saveSemester: (data: any) => adminRequest.post('/admin/semesters', data),
+    getUnits: (semesterId?: number) => adminRequest.get('/admin/units', { params: { semester_id: semesterId } }),
+    saveUnit: (data: any) => adminRequest.post('/admin/units', data),
     
-    getKnowledge: (unitId?: number) => request.get('/admin/knowledge', { params: { unit_id: unitId } }),
-    saveKnowledge: (data: any) => request.post('/admin/knowledge', data),
-    getExamPoints: (knowledgePointId?: number) => request.get('/admin/exam-points', { params: { knowledge_point_id: knowledgePointId } }),
-    saveExamPoint: (data: any) => request.post('/admin/exam-points', data),
+    getKnowledge: (unitId?: number) => adminRequest.get('/admin/knowledge', { params: { unit_id: unitId } }),
+    saveKnowledge: (data: any) => adminRequest.post('/admin/knowledge', data),
+    getExamPoints: (knowledgePointId?: number) => adminRequest.get('/admin/exam-points', { params: { knowledge_point_id: knowledgePointId } }),
+    saveExamPoint: (data: any) => adminRequest.post('/admin/exam-points', data),
     
-    getQuestionTypes: () => request.get('/admin/question-types'),
-    getDifficulties: () => request.get('/admin/difficulties'),
-    getQuestions: (unitId?: number) => request.get('/admin/questions', { params: { unit_id: unitId } }),
-    saveQuestion: (data: any) => request.post('/admin/questions', data)
+    getQuestionTypes: () => adminRequest.get('/admin/question-types'),
+    getDifficulties: () => adminRequest.get('/admin/difficulties'),
+    getQuestions: (unitId?: number) => adminRequest.get('/admin/questions', { params: { unit_id: unitId } }),
+    saveQuestion: (data: any) => adminRequest.post('/admin/questions', data)
   }
 }

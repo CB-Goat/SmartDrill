@@ -6,10 +6,11 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
-from app.models.models import User
+from app.models.models import User, AdminUser
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+admin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/auth/login")
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -33,7 +34,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         username: str = payload.get("sub")
-        if username is None:
+        user_type: str = payload.get("type", "user")
+        if username is None or user_type != "user":
             raise credentials_exception
     except JWTError:
         raise credentials_exception
@@ -43,7 +45,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
-async def get_current_admin(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    return current_user
+async def get_current_admin(token: str = Depends(admin_oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无效的管理员认证凭证",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        username: str = payload.get("sub")
+        user_type: str = payload.get("type", "admin")
+        if username is None or user_type != "admin":
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    admin = db.query(AdminUser).filter(AdminUser.username == username).first()
+    if admin is None:
+        raise credentials_exception
+    return admin
