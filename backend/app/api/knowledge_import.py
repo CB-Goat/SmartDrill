@@ -125,10 +125,14 @@ async def import_knowledge_exam_points(
         subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
         import_log.append(f"📄 处理Sheet: {sheet_name} -> 科目: {subject_name}")
         
+        last_grade = None
+        last_semester = None
+        last_unit_number = None
+        last_unit_name = None
         last_knowledge_content = None
         
         for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row or not row[0]:
+            if not row:
                 continue
             
             grade_name = str(row[0]).strip() if row[0] else None
@@ -140,25 +144,33 @@ async def import_knowledge_exam_points(
             exam_types = str(row[6]).strip() if row[6] else None
             exam_frequency = str(row[7]).strip() if row[7] else '常考'
             
+            if grade_name:
+                last_grade = grade_name
+            if semester_name:
+                last_semester = semester_name
+            if unit_number:
+                last_unit_number = unit_number
+            if unit_name:
+                last_unit_name = unit_name
             if knowledge_content:
                 last_knowledge_content = knowledge_content
             
-            if not all([grade_name, semester_name, unit_number, unit_name]):
+            if not all([last_grade, last_semester, last_unit_number, last_unit_name]):
                 skipped_count += 1
                 import_log.append(f"  ✗ 行{row_idx}: 缺少必要字段")
                 continue
             
             if not exam_content:
                 skipped_count += 1
-                import_log.append(f"  ✗ 行{row_idx}: {unit_name} 无考点内容")
+                import_log.append(f"  ✗ 行{row_idx}: {last_unit_name} 无考点内容")
                 continue
             
             grade = db.query(Grade).filter(
                 Grade.version_id == version.id,
-                Grade.name == grade_name
+                Grade.name == last_grade
             ).first()
             if not grade:
-                grade = Grade(version_id=version.id, name=grade_name)
+                grade = Grade(version_id=version.id, name=last_grade)
                 db.add(grade)
                 db.commit()
                 db.refresh(grade)
@@ -175,25 +187,25 @@ async def import_knowledge_exam_points(
             
             semester = db.query(Semester).filter(
                 Semester.subject_id == subject.id,
-                Semester.name == semester_name
+                Semester.name == last_semester
             ).first()
             if not semester:
-                semester = Semester(subject_id=subject.id, name=semester_name)
+                semester = Semester(subject_id=subject.id, name=last_semester)
                 db.add(semester)
                 db.commit()
                 db.refresh(semester)
             
             unit = db.query(Unit).filter(
                 Unit.semester_id == semester.id,
-                Unit.name.like(f"%{unit_number}%")
+                Unit.name.like(f"%{last_unit_number}%")
             ).first()
             if not unit:
-                unit = Unit(semester_id=semester.id, name=f"{unit_number} {unit_name}")
+                unit = Unit(semester_id=semester.id, name=f"{last_unit_number} {last_unit_name}")
                 db.add(unit)
                 db.commit()
                 db.refresh(unit)
             
-            unit_key = f"{grade_name}-{subject_name}-{semester_name}-{unit_number}"
+            unit_key = f"{last_grade}-{subject_name}-{last_semester}-{last_unit_number}"
             
             if unit_key not in unit_knowledge_map:
                 kp = db.query(KnowledgePoint).filter(
@@ -201,23 +213,23 @@ async def import_knowledge_exam_points(
                 ).first()
                 
                 if not kp:
-                    kp_content = knowledge_content or last_knowledge_content or ""
+                    kp_content = last_knowledge_content or ""
                     kp = KnowledgePoint(
                         unit_id=unit.id,
-                        title=f"{unit_name} - 知识点",
+                        title=f"{last_unit_name} - 知识点",
                         content=kp_content
                     )
                     db.add(kp)
                     db.commit()
                     db.refresh(kp)
-                    import_log.append(f"  ✓ 创建知识点: {unit_name}")
+                    import_log.append(f"  ✓ 创建知识点: {last_unit_name}")
                 
                 unit_knowledge_map[unit_key] = kp
             
             kp = unit_knowledge_map[unit_key]
             
-            if knowledge_content and kp.content != knowledge_content:
-                kp.content = knowledge_content
+            if last_knowledge_content and kp.content != last_knowledge_content:
+                kp.content = last_knowledge_content
                 db.commit()
             
             if exam_content:
@@ -233,7 +245,7 @@ async def import_knowledge_exam_points(
                         title=exam_title,
                         content=exam_content,
                         exam_types=exam_types,
-                        exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考'] else '常考'
+                        exam_frequency=exam_frequency if exam_frequency in ['少考', '常考', '必考', '必考重点'] else '常考'
                     )
                     db.add(ep)
                     db.commit()
