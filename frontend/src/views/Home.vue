@@ -4,6 +4,7 @@
       <div class="header-content">
         <div class="welcome-text">欢迎回来</div>
         <div class="user-name">{{ userStore.userInfo?.username || '用户' }}</div>
+        <button class="logout-btn" @click="handleLogout">退出登录</button>
       </div>
       <div class="points-card">
         <div class="points-label">我的积分</div>
@@ -49,14 +50,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
+const router = useRouter()
 const userStore = useUserStore()
 const active = ref(0)
 
 onMounted(() => {
   userStore.fetchUserInfo()
 })
+
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
 </script>
 
 <style scoped>
@@ -88,6 +96,22 @@ onMounted(() => {
 .user-name {
   font-size: 24px;
   font-weight: bold;
+}
+
+.logout-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  margin-top: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.logout-btn:active {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .points-card {
