@@ -123,8 +123,11 @@ async def import_knowledge_exam_points(
         sheet = wb[sheet_name]
         
         subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
+        import_log.append(f"📄 处理Sheet: {sheet_name} -> 科目: {subject_name}")
         
-        for row in sheet.iter_rows(min_row=2, values_only=True):
+        last_knowledge_content = None
+        
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             if not row or not row[0]:
                 continue
             
@@ -137,8 +140,17 @@ async def import_knowledge_exam_points(
             exam_types = str(row[6]).strip() if row[6] else None
             exam_frequency = str(row[7]).strip() if row[7] else '常考'
             
+            if knowledge_content:
+                last_knowledge_content = knowledge_content
+            
             if not all([grade_name, semester_name, unit_number, unit_name]):
                 skipped_count += 1
+                import_log.append(f"  ✗ 行{row_idx}: 缺少必要字段")
+                continue
+            
+            if not exam_content:
+                skipped_count += 1
+                import_log.append(f"  ✗ 行{row_idx}: {unit_name} 无考点内容")
                 continue
             
             grade = db.query(Grade).filter(
@@ -189,24 +201,23 @@ async def import_knowledge_exam_points(
                 ).first()
                 
                 if not kp:
+                    kp_content = knowledge_content or last_knowledge_content or ""
                     kp = KnowledgePoint(
                         unit_id=unit.id,
                         title=f"{unit_name} - 知识点",
-                        content=knowledge_content or ""
+                        content=kp_content
                     )
                     db.add(kp)
                     db.commit()
                     db.refresh(kp)
+                    import_log.append(f"  ✓ 创建知识点: {unit_name}")
                 
                 unit_knowledge_map[unit_key] = kp
             
             kp = unit_knowledge_map[unit_key]
             
             if knowledge_content and kp.content != knowledge_content:
-                if kp.content:
-                    kp.content = knowledge_content
-                else:
-                    kp.content = knowledge_content
+                kp.content = knowledge_content
                 db.commit()
             
             if exam_content:
@@ -227,18 +238,17 @@ async def import_knowledge_exam_points(
                     db.add(ep)
                     db.commit()
                     imported_count += 1
-                    import_log.append(f"✓ {subject_name} - {unit_name} - {exam_title[:30]}")
+                    import_log.append(f"  ✓ 行{row_idx}: {exam_title[:30]} ({exam_frequency})")
                 else:
                     duplicate_count += 1
-            else:
-                import_log.append(f"✗ {subject_name} - {unit_name} - 无考点内容")
+                    import_log.append(f"  - 行{row_idx}: 重复考点")
     
     return {
         "message": f"导入完成",
         "imported": imported_count,
         "skipped": skipped_count,
         "duplicate": duplicate_count,
-        "log": import_log[:20]
+        "log": import_log[:50]
     }
 
 @router.post("/clean-duplicate-exam-points")
