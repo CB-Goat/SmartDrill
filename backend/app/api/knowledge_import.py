@@ -926,8 +926,6 @@ def get_unit_word(
     title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    doc.add_paragraph()
-    
     subtitle = doc.add_paragraph()
     subtitle_run = subtitle.add_run("知识点")
     subtitle_run.font.size = Pt(16)
@@ -935,8 +933,7 @@ def get_unit_word(
     subtitle_run.font.color.rgb = RGBColor(0, 102, 204)
     subtitle_run.font.name = '宋体'
     subtitle_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    
-    doc.add_paragraph()
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     if knowledge and knowledge.content:
         format_content(doc, knowledge.content)
@@ -954,8 +951,7 @@ def get_unit_word(
     subtitle2_run.font.color.rgb = RGBColor(0, 102, 204)
     subtitle2_run.font.name = '宋体'
     subtitle2_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    
-    doc.add_paragraph()
+    subtitle2.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     if exam_points:
         for idx, ep in enumerate(exam_points, 1):
