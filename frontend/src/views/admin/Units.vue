@@ -2,7 +2,10 @@
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px">
       <h2 style="margin: 0">单元管理</h2>
-      <button class="btn-primary" @click="openAdd">添加单元</button>
+      <div>
+        <button class="btn-default" @click="showImport = true" style="margin-right: 8px">Excel导入</button>
+        <button class="btn-primary" @click="openAdd">添加单元</button>
+      </div>
     </div>
     <div class="filter-bar">
       <select v-model="filterVersionId" @change="onVersionChange">
@@ -74,6 +77,24 @@
         </form>
       </div>
     </div>
+    
+    <div v-if="showImport" class="modal-overlay" @click="showImport = false">
+      <div class="modal-content" @click.stop>
+        <h3>Excel导入单元</h3>
+        <div class="form-item">
+          <label>选择Excel文件</label>
+          <input type="file" accept=".xlsx,.xls" @change="handleFileChange" />
+        </div>
+        <div class="import-tips">
+          <p>Excel格式要求（单元目录Sheet）：</p>
+          <p>A列：学科 | B列：年级 | C列：学期 | D列：单元序号 | E列：单元编号 | F列：单元名称</p>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-default" @click="showImport = false">取消</button>
+          <button type="button" class="btn-primary" @click="doImport" :disabled="!importFile">导入</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -87,6 +108,8 @@ const grades = ref<any[]>([])
 const subjects = ref<any[]>([])
 const semesters = ref<any[]>([])
 const showForm = ref(false)
+const showImport = ref(false)
+const importFile = ref<File | null>(null)
 const filterVersionId = ref(1)
 const filterGradeId = ref(1)
 const filterSubjectId = ref(1)
@@ -208,6 +231,36 @@ async function deleteItem(item: any) {
   onLoad()
 }
 
+function handleFileChange(e: any) {
+  importFile.value = e.target.files[0]
+}
+
+async function doImport() {
+  if (!importFile.value) return
+  
+  const formData = new FormData()
+  formData.append('file', importFile.value)
+  
+  try {
+    const response = await fetch('/api/admin/import-units', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+      },
+      body: formData
+    })
+    
+    const result = await response.json()
+    const msg = `${result.message}\n导入: ${result.imported}个\n跳过: ${result.skipped}行\n\n${result.log?.join('\n') || ''}`
+    alert(msg)
+    showImport.value = false
+    importFile.value = null
+    onLoad()
+  } catch (error) {
+    alert('导入失败')
+  }
+}
+
 onMounted(onLoad)
 </script>
 
@@ -224,5 +277,18 @@ onMounted(onLoad)
   border: 1px solid #d9d9d9;
   border-radius: 4px;
   min-width: 150px;
+}
+
+.import-tips {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+.import-tips p {
+  margin: 4px 0;
+  color: #666;
+  font-size: 12px;
 }
 </style>
