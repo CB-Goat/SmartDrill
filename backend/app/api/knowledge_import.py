@@ -849,7 +849,7 @@ def get_unit_word(
     
     title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name}"
     
-    doc.add_page_break()
+
     title = doc.add_paragraph()
     title_run = title.add_run(title_text)
     title_run.font.size = Pt(18)
