@@ -74,37 +74,7 @@
             <button class="close-btn" @click="previewVisible = false">×</button>
           </div>
         </div>
-        <div class="modal-body word-container">
-          <div class="word-page">
-            <div class="page-title">{{ previewData?.unit_name }}</div>
-            <div class="section-title">知识点</div>
-            <div class="content-area">
-              <div v-if="previewData?.knowledge?.content" class="knowledge-content">
-                <p v-for="(line, idx) in previewData.knowledge.content.split('\n')" :key="idx">{{ line }}</p>
-              </div>
-              <div v-else class="empty-hint">暂无知识点内容</div>
-            </div>
-          </div>
-          <div class="word-page">
-            <div class="section-title">考点</div>
-            <div class="content-area">
-              <div v-if="previewData?.exam_points?.length > 0" class="exam-points-list">
-                <div v-for="(ep, idx) in previewData.exam_points" :key="ep.id" class="exam-item">
-                  <div class="exam-title-row">
-                    <span class="exam-num">{{ idx + 1 }}.</span>
-                    <span class="exam-title">{{ ep.title }}</span>
-                    <span v-if="ep.exam_frequency" class="freq-badge" :class="'freq-' + ep.exam_frequency">{{ ep.exam_frequency }}</span>
-                  </div>
-                  <div v-if="ep.exam_types" class="exam-types">题型：{{ ep.exam_types }}</div>
-                  <div v-if="ep.content" class="exam-content">
-                    <p v-for="(line, lineIdx) in ep.content.split('\n')" :key="lineIdx">{{ line }}</p>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="empty-hint">暂无考点内容</div>
-            </div>
-          </div>
-        </div>
+        <div class="modal-body word-container" ref="previewContainer"></div>
       </div>
     </div>
   </div>
@@ -127,6 +97,7 @@ const filterSemesterId = ref<number | null>(null)
 
 const previewVisible = ref(false)
 const previewData = ref<any>(null)
+const previewContainer = ref<HTMLElement | null>(null)
 
 const filteredGrades = computed(() => grades.value.filter(g => g.version_id === filterVersionId.value))
 const filteredSubjects = computed(() => filterGradeId.value ? subjects.value.filter(s => s.grade_id === filterGradeId.value) : subjects.value.filter(s => {
@@ -192,19 +163,42 @@ async function queryData() {
 
 async function previewUnit(unit: any) {
   try {
-    const response = await fetch(`/api/admin/unit-detail/${unit.id}`, {
-      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') }
+    const token = localStorage.getItem('admin_token')
+    const response = await fetch(`/api/admin/unit-word/${unit.id}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
     })
-    const result = await response.json()
+    const blob = await response.blob()
+    
     previewData.value = {
       unit_id: unit.id,
-      unit_name: `${unit.grade_name} ${unit.subject_name} ${unit.semester_name} - ${unit.name}`,
-      knowledge: result.knowledge,
-      exam_points: result.exam_points
+      unit_name: `${unit.grade_name} ${unit.subject_name} ${unit.semester_name} - ${unit.name}`
     }
     previewVisible.value = true
+    
+    setTimeout(async () => {
+      if (previewContainer.value) {
+        const { renderAsync } = await import('docx-preview')
+        previewContainer.value.innerHTML = ''
+        await renderAsync(blob, previewContainer.value, undefined, {
+          className: 'docx-preview-wrapper',
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          breakPages: true,
+          ignoreLastRenderedPageBreak: true,
+          experimental: false,
+          trimXmlDeclaration: true,
+          useBase64URL: true,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderEndnotes: true
+        })
+      }
+    }, 100)
   } catch (error) {
-    alert('获取详情失败')
+    alert('预览失败')
   }
 }
 
@@ -482,195 +476,30 @@ onMounted(onLoad)
   flex: 1;
 }
 
-.section {
-  margin-bottom: 24px;
-}
-
-.section h4 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  color: #333;
-  border-left: 3px solid #1890ff;
-  padding-left: 12px;
-}
-
-.content-box {
-  background: #f5f5f5;
-  border-radius: 4px;
-  padding: 16px;
-}
-
-.content-box pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.empty-text {
-  color: #999;
-  font-size: 14px;
-}
-
-.exam-point-item {
-  background: #f5f5f5;
-  border-radius: 4px;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-.ep-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.ep-title {
-  font-weight: 500;
-  color: #333;
-  flex: 1;
-}
-
-.ep-tag {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #fff;
-}
-
-.freq-必考 {
-  background: #f5222d;
-}
-
-.freq-常考 {
-  background: #fa8c16;
-}
-
-.freq-少考 {
-  background: #52c41a;
-}
-
-.ep-types {
-  color: #666;
-  font-size: 12px;
-}
-
-.ep-content {
-  margin: 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.6;
-  color: #333;
-}
 
 .word-preview {
-  max-width: 1000px;
+  max-width: 1200px;
 }
 
 .word-container {
   background: #f0f0f0;
   padding: 20px;
-  display: flex;
-  gap: 20px;
-  overflow-x: auto;
-}
-
-.word-page {
-  background: #fff;
-  width: 595px;
-  min-height: 842px;
-  padding: 72px 90px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
-}
-
-.page-title {
-  font-size: 18px;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 30px;
-  color: #000;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: bold;
-  color: #0066cc;
-  margin-bottom: 20px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #0066cc;
-}
-
-.content-area {
-  font-size: 12pt;
-  line-height: 1.8;
-  color: #000;
-}
-
-.knowledge-content p,
-.exam-content p {
-  margin: 0 0 8px 0;
-  text-indent: 2em;
-}
-
-.empty-hint {
-  color: #999;
-  font-style: italic;
-}
-
-.exam-points-list {
-  margin-top: 10px;
-}
-
-.exam-item {
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px dashed #e0e0e0;
-}
-
-.exam-item:last-child {
-  border-bottom: none;
-}
-
-.exam-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.exam-num {
-  font-weight: bold;
-  color: #000;
-}
-
-.exam-title {
-  font-size: 14px;
-  font-weight: bold;
-  color: #000;
+  overflow-y: auto;
   flex: 1;
 }
 
-.freq-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #fff;
-  font-weight: normal;
+.word-container :deep(.docx-preview-wrapper) {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  margin: 0 auto;
 }
 
-.exam-types {
-  font-size: 11pt;
-  color: #666;
-  margin-bottom: 8px;
+.word-container :deep(.docx-wrapper) {
+  background: transparent;
 }
 
-.exam-content {
-  margin-top: 8px;
+.word-container :deep(section.docx) {
+  box-shadow: none;
+  margin-bottom: 20px;
 }
 </style>
