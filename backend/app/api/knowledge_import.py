@@ -10,7 +10,7 @@ from app.utils.auth import get_current_admin
 from openpyxl import load_workbook
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor, Twips
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -961,33 +961,38 @@ def get_unit_word(
         for idx, ep in enumerate(exam_points, 1):
             p = doc.add_paragraph()
             
+            tab_stops = p.paragraph_format.tab_stops
+            tab_stops.add_tab_stop(Inches(3.25), WD_TAB_ALIGNMENT.CENTER)
+            tab_stops.add_tab_stop(Inches(6.5), WD_TAB_ALIGNMENT.RIGHT)
+            
             title_run = p.add_run(f"{idx}. {ep.title}")
             title_run.font.size = Pt(14)
             title_run.font.bold = True
             title_run.font.name = '宋体'
             title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
             
-            types_text = f"[{ep.exam_types}]" if ep.exam_types else ""
-            freq_text = f"[{ep.exam_frequency.value}]" if ep.exam_frequency else ""
+            p.add_run('\t')
             
-            if types_text or freq_text:
-                p.add_run("  ")
-                meta_run = p.add_run(f"{types_text}  {freq_text}")
-                meta_run.font.size = Pt(12)
-                meta_run.font.name = '宋体'
-                meta_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-                
-                if ep.exam_frequency:
-                    if ep.exam_frequency.value == '必考':
-                        freq_start = meta_run.text.rfind('[')
-                        if freq_start >= 0:
-                            pass
-                    if ep.exam_frequency.value == '必考':
-                        meta_run.font.color.rgb = RGBColor(255, 0, 0)
-                    elif ep.exam_frequency.value == '常考':
-                        meta_run.font.color.rgb = RGBColor(255, 153, 0)
-                    else:
-                        meta_run.font.color.rgb = RGBColor(0, 153, 0)
+            if ep.exam_types:
+                types_run = p.add_run(f"[{ep.exam_types}]")
+                types_run.font.size = Pt(12)
+                types_run.font.name = '宋体'
+                types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            p.add_run('\t')
+            
+            if ep.exam_frequency:
+                freq_text = ep.exam_frequency.value
+                freq_run = p.add_run(f"[{freq_text}]")
+                freq_run.font.size = Pt(12)
+                freq_run.font.name = '宋体'
+                freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                if freq_text == '必考':
+                    freq_run.font.color.rgb = RGBColor(255, 0, 0)
+                elif freq_text == '常考':
+                    freq_run.font.color.rgb = RGBColor(255, 153, 0)
+                else:
+                    freq_run.font.color.rgb = RGBColor(0, 153, 0)
             
             if ep.content:
                 format_content(doc, ep.content)
