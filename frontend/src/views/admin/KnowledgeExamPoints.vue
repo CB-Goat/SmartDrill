@@ -15,29 +15,61 @@
         <option v-for="v in versions" :key="v.id" :value="v.id">{{ v.name }}</option>
       </select>
       <select v-model="filterGradeId" @change="onGradeChange">
+        <option :value="null">全部年级</option>
         <option v-for="g in filteredGrades" :key="g.id" :value="g.id">{{ g.name }}</option>
       </select>
       <select v-model="filterSubjectId" @change="onSubjectChange">
+        <option :value="null">全部科目</option>
         <option v-for="s in filteredSubjects" :key="s.id" :value="s.id">{{ s.name }}</option>
       </select>
-      <select v-model="filterSemesterId" @change="onLoad">
+      <select v-model="filterSemesterId">
+        <option :value="null">全部学期</option>
         <option v-for="sem in filteredSemesters" :key="sem.id" :value="sem.id">{{ sem.name }}</option>
       </select>
+      <button class="btn-primary" @click="queryData">查询</button>
     </div>
-
+    
+    <div v-if="queryResults.length > 0" class="query-results">
+      <h3>查询结果（{{ queryResults.length }}个单元）</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>单元ID</th>
+            <th>年级</th>
+            <th>科目</th>
+            <th>学期</th>
+            <th>单元序号</th>
+            <th>单元名称</th>
+            <th>知识点</th>
+            <th>考点数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="unit in queryResults" :key="unit.id">
+            <td>{{ unit.id }}</td>
+            <td>{{ unit.grade_name }}</td>
+            <td>{{ unit.subject_name }}</td>
+            <td>{{ unit.semester_name }}</td>
+            <td>{{ unit.unit_number }}</td>
+            <td>{{ unit.name }}</td>
+            <td>{{ unit.has_knowledge ? '✓' : '✗' }}</td>
+            <td>{{ unit.exam_point_count }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api } from '@/api'
 
-const items = ref<any[]>([])
 const versions = ref<any[]>([])
 const grades = ref<any[]>([])
 const subjects = ref<any[]>([])
 const semesters = ref<any[]>([])
-const importFile = ref<File | null>(null)
+const queryResults = ref<any[]>([])
 
 const filterVersionId = ref(1)
 const filterGradeId = ref<number | null>(null)
@@ -62,21 +94,20 @@ async function onLoad() {
   grades.value = await api.admin.getGrades()
   subjects.value = await api.admin.getSubjects()
   semesters.value = await api.admin.getSemesters()
-  
-  if (filteredGrades.value.length > 0 && !filterGradeId.value) {
-    filterGradeId.value = filteredGrades.value[0].id
-  }
 }
 
 function onVersionChange() {
   filterGradeId.value = null
   filterSubjectId.value = null
   filterSemesterId.value = null
-  onLoad()
 }
 
 function onGradeChange() {
   filterSubjectId.value = null
+  filterSemesterId.value = null
+}
+
+function onSubjectChange() {
   filterSemesterId.value = null
 }
 
@@ -86,6 +117,24 @@ function getFilterScope() {
     grade_id: filterGradeId.value,
     subject_id: filterSubjectId.value,
     semester_id: filterSemesterId.value
+  }
+}
+
+async function queryData() {
+  const scope = getFilterScope()
+  try {
+    const response = await fetch('/api/admin/query-units', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + localStorage.getItem('admin_token'),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(scope)
+    })
+    const result = await response.json()
+    queryResults.value = result.units || []
+  } catch (error) {
+    alert('查询失败')
   }
 }
 
@@ -211,6 +260,7 @@ onMounted(onLoad)
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 .filter-bar select {
   padding: 8px 12px;
@@ -219,16 +269,37 @@ onMounted(onLoad)
   min-width: 150px;
 }
 
-.import-tips {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 4px;
-  margin: 16px 0;
+.query-results {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
 }
 
-.import-tips p {
-  margin: 4px 0;
-  color: #666;
-  font-size: 12px;
+.query-results h3 {
+  margin: 0 0 16px 0;
+  color: #333;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.data-table th {
+  background: #fafafa;
+  font-weight: 500;
+  color: #333;
+}
+
+.data-table tbody tr:hover {
+  background: #f5f5f5;
 }
 </style>
