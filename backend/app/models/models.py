@@ -100,6 +100,7 @@ class Unit(Base):
     unit_number = Column(Integer, nullable=False)
     name = Column(String(100), nullable=False)
     knowledge_points = relationship("KnowledgePoint", back_populates="unit", cascade="all, delete-orphan")
+    exam_points = relationship("ExamPoint", back_populates="unit", cascade="all, delete-orphan")
     semester = relationship("Semester", back_populates="units")
 
 class KnowledgePoint(Base):
@@ -109,7 +110,7 @@ class KnowledgePoint(Base):
     unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     content = Column(Text)
-    exam_points = relationship("ExamPoint", back_populates="knowledge_point", cascade="all, delete-orphan")
+
     unit = relationship("Unit", back_populates="knowledge_points")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -117,13 +118,13 @@ class ExamPoint(Base):
     __tablename__ = "exam_points"
     
     id = Column(Integer, primary_key=True, index=True)
-    knowledge_point_id = Column(Integer, ForeignKey("knowledge_points.id", ondelete="CASCADE"), nullable=False)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     content = Column(Text)
     exam_types = Column(String(255))
     exam_frequency = Column(Enum(ExamFrequency), default=ExamFrequency.often)
     questions = relationship("Question", back_populates="exam_point", cascade="all, delete-orphan")
-    knowledge_point = relationship("KnowledgePoint", back_populates="exam_points")
+    unit = relationship("Unit", back_populates="exam_points")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class QuestionType(Base):

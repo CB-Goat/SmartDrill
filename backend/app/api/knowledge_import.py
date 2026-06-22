@@ -21,7 +21,7 @@ def get_knowledge_exam_points(unit_id: int = None, admin: User = Depends(get_cur
     knowledge_points = query.all()
     result = []
     for kp in knowledge_points:
-        exam_points = db.query(ExamPoint).filter(ExamPoint.knowledge_point_id == kp.id).all()
+        exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == kp.unit_id).all()
         result.append({
             "id": kp.id,
             "unit_id": kp.unit_id,
@@ -247,7 +247,7 @@ async def import_knowledge_exam_points(
             
             if exam_content:
                 existing_ep = db.query(ExamPoint).filter(
-                    ExamPoint.knowledge_point_id == kp.id,
+                    ExamPoint.unit_id == unit.id,
                     ExamPoint.content == exam_content
                 ).first()
                 
@@ -257,7 +257,7 @@ async def import_knowledge_exam_points(
                     exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
                     freq = '必考' if exam_frequency in ['必考', '必考重点'] else ('常考' if exam_frequency == '常考' else '少考')
                     ep = ExamPoint(
-                        knowledge_point_id=kp.id,
+                        unit_id=unit.id,
                         title=exam_title,
                         content=exam_content_clean,
                         exam_types=exam_types,
@@ -281,11 +281,11 @@ async def import_knowledge_exam_points(
 
 @router.post("/clean-duplicate-exam-points")
 def clean_duplicate_exam_points(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    all_kps = db.query(KnowledgePoint).all()
+    all_units = db.query(Unit).all()
     deleted_count = 0
     
-    for kp in all_kps:
-        exam_points = db.query(ExamPoint).filter(ExamPoint.knowledge_point_id == kp.id).all()
+    for unit in all_units:
+        exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).all()
         
         seen_contents = set()
         for ep in exam_points:
@@ -304,10 +304,10 @@ def delete_unit_knowledge(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
+    db.query(ExamPoint).filter(ExamPoint.unit_id == unit_id).delete()
     kps = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).all()
     deleted_count = 0
     for kp in kps:
-        db.query(ExamPoint).filter(ExamPoint.knowledge_point_id == kp.id).delete()
         db.delete(kp)
         deleted_count += 1
     db.commit()
