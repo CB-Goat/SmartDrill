@@ -279,6 +279,320 @@ async def import_knowledge_exam_points(
         "log": import_log[:50]
     }
 
+@router.post("/import-knowledge")
+async def import_knowledge(
+    file: UploadFile = File(...),
+    version_id: int = None,
+    grade_id: int = None,
+    subject_id: int = None,
+    semester_id: int = None,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="只支持Excel文件")
+    
+    contents = await file.read()
+    try:
+        wb = load_workbook(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Excel文件解析失败: {str(e)}")
+    
+    imported_count = 0
+    import_log = []
+    
+    for sheet_name in wb.sheetnames:
+        sheet = wb[sheet_name]
+        subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
+        import_log.append(f"📄 处理Sheet: {sheet_name}")
+        
+        last_grade = None
+        last_semester = None
+        last_unit_number = None
+        last_unit_name = None
+        last_knowledge_content = None
+        
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+            if not row:
+                continue
+            
+            grade_name = str(row[0]).strip() if row[0] else None
+            semester_name = str(row[1]).strip() if row[1] else None
+            unit_number_text = str(row[2]).strip() if row[2] else None
+            unit_name = str(row[3]).strip() if row[3] else None
+            knowledge_content = str(row[4]).strip() if row[4] else None
+            
+            if grade_name:
+                last_grade = grade_name
+            if semester_name:
+                last_semester = semester_name
+            if unit_number_text:
+                chinese_nums = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+                for cn, num in chinese_nums.items():
+                    if cn in unit_number_text:
+                        last_unit_number = num
+                        break
+                if not last_unit_number:
+                    import re
+                    match = re.search(r'\d+', unit_number_text)
+                    if match:
+                        last_unit_number = int(match.group())
+            if unit_name:
+                last_unit_name = unit_name
+            if knowledge_content:
+                last_knowledge_content = knowledge_content
+            
+            if not all([last_grade, last_semester, last_unit_number, last_unit_name]):
+                continue
+            
+            grade_obj = db.query(Grade).filter(Grade.name == last_grade).first()
+            if not grade_obj:
+                continue
+            if grade_id and grade_obj.id != grade_id:
+                continue
+            
+            subject_obj = db.query(Subject).filter(
+                Subject.grade_id == grade_obj.id,
+                Subject.name == subject_name
+            ).first()
+            if not subject_obj:
+                continue
+            if subject_id and subject_obj.id != subject_id:
+                continue
+            
+            semester_obj = db.query(Semester).filter(
+                Semester.subject_id == subject_obj.id,
+                Semester.name == last_semester
+            ).first()
+            if not semester_obj:
+                continue
+            if semester_id and semester_obj.id != semester_id:
+                continue
+            
+            unit = db.query(Unit).filter(
+                Unit.semester_id == semester_obj.id,
+                Unit.unit_number == last_unit_number
+            ).first()
+            if not unit:
+                continue
+            
+            kp = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first()
+            if kp:
+                db.delete(kp)
+                db.commit()
+            
+            kp = KnowledgePoint(
+                unit_id=unit.id,
+                title=f"{last_unit_name} - 知识点",
+                content=last_knowledge_content or ""
+            )
+            db.add(kp)
+            db.commit()
+            imported_count += 1
+            import_log.append(f"  ✓ {last_grade} {subject_name} {last_semester} - {last_unit_name}")
+    
+    return {"message": f"导入完成，共{imported_count}个知识点", "log": import_log[:50]}
+
+@router.post("/clear-knowledge")
+def clear_knowledge(
+    data: dict,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    version_id = data.get('version_id')
+    grade_id = data.get('grade_id')
+    subject_id = data.get('subject_id')
+    semester_id = data.get('semester_id')
+    
+    query = db.query(KnowledgePoint)
+    
+    if semester_id:
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id == semester_id).all()]
+        query = query.filter(KnowledgePoint.unit_id.in_(unit_ids))
+    elif subject_id:
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id == subject_id).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(semester_ids)).all()]
+        query = query.filter(KnowledgePoint.unit_id.in_(unit_ids))
+    elif grade_id:
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id == grade_id).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(semester_ids)).all()]
+        query = query.filter(KnowledgePoint.unit_id.in_(unit_ids))
+    elif version_id:
+        grade_ids = [g.id for g in db.query(Grade).filter(Grade.version_id == version_id).all()]
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id.in_(grade_ids)).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(semester_ids)).all()]
+        query = query.filter(KnowledgePoint.unit_id.in_(unit_ids))
+    
+    count = query.count()
+    query.delete()
+    db.commit()
+    
+    return {"message": f"已清除{count}个知识点"}
+
+@router.post("/import-exam-points")
+async def import_exam_points(
+    file: UploadFile = File(...),
+    version_id: int = None,
+    grade_id: int = None,
+    subject_id: int = None,
+    semester_id: int = None,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="只支持Excel文件")
+    
+    contents = await file.read()
+    try:
+        wb = load_workbook(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Excel文件解析失败: {str(e)}")
+    
+    imported_count = 0
+    import_log = []
+    
+    for sheet_name in wb.sheetnames:
+        sheet = wb[sheet_name]
+        subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
+        import_log.append(f"📄 处理Sheet: {sheet_name}")
+        
+        last_grade = None
+        last_semester = None
+        last_unit_number = None
+        last_unit_name = None
+        
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+            if not row:
+                continue
+            
+            grade_name = str(row[0]).strip() if row[0] else None
+            semester_name = str(row[1]).strip() if row[1] else None
+            unit_number_text = str(row[2]).strip() if row[2] else None
+            unit_name = str(row[3]).strip() if row[3] else None
+            exam_content = str(row[5]).strip() if row[5] else None
+            exam_types = str(row[6]).strip() if row[6] else None
+            exam_frequency = str(row[7]).strip() if row[7] else '常考'
+            
+            if grade_name:
+                last_grade = grade_name
+            if semester_name:
+                last_semester = semester_name
+            if unit_number_text:
+                chinese_nums = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+                for cn, num in chinese_nums.items():
+                    if cn in unit_number_text:
+                        last_unit_number = num
+                        break
+                if not last_unit_number:
+                    import re
+                    match = re.search(r'\d+', unit_number_text)
+                    if match:
+                        last_unit_number = int(match.group())
+            if unit_name:
+                last_unit_name = unit_name
+            
+            if not all([last_grade, last_semester, last_unit_number, exam_content]):
+                continue
+            
+            grade_obj = db.query(Grade).filter(Grade.name == last_grade).first()
+            if not grade_obj:
+                continue
+            if grade_id and grade_obj.id != grade_id:
+                continue
+            
+            subject_obj = db.query(Subject).filter(
+                Subject.grade_id == grade_obj.id,
+                Subject.name == subject_name
+            ).first()
+            if not subject_obj:
+                continue
+            if subject_id and subject_obj.id != subject_id:
+                continue
+            
+            semester_obj = db.query(Semester).filter(
+                Semester.subject_id == subject_obj.id,
+                Semester.name == last_semester
+            ).first()
+            if not semester_obj:
+                continue
+            if semester_id and semester_obj.id != semester_id:
+                continue
+            
+            unit = db.query(Unit).filter(
+                Unit.semester_id == semester_obj.id,
+                Unit.unit_number == last_unit_number
+            ).first()
+            if not unit:
+                continue
+            
+            existing_ep = db.query(ExamPoint).filter(
+                ExamPoint.unit_id == unit.id,
+                ExamPoint.content == exam_content
+            ).first()
+            
+            if existing_ep:
+                db.delete(existing_ep)
+                db.commit()
+            
+            lines = exam_content.split('\n')
+            exam_title = lines[0][:50] if lines else exam_content[:50]
+            exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
+            freq = '必考' if exam_frequency in ['必考', '必考重点'] else ('常考' if exam_frequency == '常考' else '少考')
+            
+            ep = ExamPoint(
+                unit_id=unit.id,
+                title=exam_title,
+                content=exam_content_clean,
+                exam_types=exam_types,
+                exam_frequency=freq
+            )
+            db.add(ep)
+            db.commit()
+            imported_count += 1
+            import_log.append(f"  ✓ {last_grade} {subject_name} {last_semester} - {exam_title[:30]}")
+    
+    return {"message": f"导入完成，共{imported_count}个考点", "log": import_log[:50]}
+
+@router.post("/clear-exam-points")
+def clear_exam_points(
+    data: dict,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    version_id = data.get('version_id')
+    grade_id = data.get('grade_id')
+    subject_id = data.get('subject_id')
+    semester_id = data.get('semester_id')
+    
+    query = db.query(ExamPoint)
+    
+    if semester_id:
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id == semester_id).all()]
+        query = query.filter(ExamPoint.unit_id.in_(unit_ids))
+    elif subject_id:
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id == subject_id).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(semester_ids)).all()]
+        query = query.filter(ExamPoint.unit_id.in_(unit_ids))
+    elif grade_id:
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id == grade_id).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(semester_ids)).all()]
+        query = query.filter(ExamPoint.unit_id.in_(unit_ids))
+    elif version_id:
+        grade_ids = [g.id for g in db.query(Grade).filter(Grade.version_id == version_id).all()]
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id.in_(grade_ids)).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(semester_ids)).all()]
+        query = query.filter(ExamPoint.unit_id.in_(unit_ids))
+    
+    count = query.count()
+    query.delete()
+    db.commit()
+    
+    return {"message": f"已清除{count}个考点"}
+
 @router.post("/clean-duplicate-exam-points")
 def clean_duplicate_exam_points(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     all_units = db.query(Unit).all()
