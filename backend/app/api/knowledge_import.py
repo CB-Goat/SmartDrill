@@ -709,3 +709,55 @@ async def import_units(
         "skipped": skipped_count,
         "log": import_log[:50]
     }
+
+@router.post("/query-units")
+def query_units(
+    data: dict,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    version_id = data.get('version_id')
+    grade_id = data.get('grade_id')
+    subject_id = data.get('subject_id')
+    semester_id = data.get('semester_id')
+    
+    query = db.query(Unit)
+    
+    if semester_id:
+        query = query.filter(Unit.semester_id == semester_id)
+    elif subject_id:
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id == subject_id).all()]
+        query = query.filter(Unit.semester_id.in_(semester_ids))
+    elif grade_id:
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id == grade_id).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        query = query.filter(Unit.semester_id.in_(semester_ids))
+    elif version_id:
+        grade_ids = [g.id for g in db.query(Grade).filter(Grade.version_id == version_id).all()]
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id.in_(grade_ids)).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        query = query.filter(Unit.semester_id.in_(semester_ids))
+    
+    units = query.all()
+    result = []
+    
+    for unit in units:
+        semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
+        subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
+        grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
+        
+        has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
+        exam_point_count = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).count()
+        
+        result.append({
+            "id": unit.id,
+            "grade_name": grade.name if grade else "",
+            "subject_name": subject.name if subject else "",
+            "semester_name": semester.name if semester else "",
+            "unit_number": unit.unit_number,
+            "name": unit.name,
+            "has_knowledge": has_knowledge,
+            "exam_point_count": exam_point_count
+        })
+    
+    return {"units": result}
