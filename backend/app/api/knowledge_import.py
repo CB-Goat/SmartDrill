@@ -59,34 +59,13 @@ def format_content(doc, content):
             run = p.add_run(title_text)
             run.font.bold = True
             run.font.size = Pt(12)
+            
             if rest_text:
-                p.add_run(rest_text)
+                p2 = doc.add_paragraph()
+                p2.paragraph_format.first_line_indent = Pt(24)
+                p2.add_run(rest_text)
             
             i += 1
-            while i < len(lines):
-                next_line = lines[i].strip()
-                if not next_line:
-                    i += 1
-                    continue
-                if next_line.startswith('【') and '】' in next_line:
-                    break
-                if '：' in next_line or ':' in next_line:
-                    colon_char = '：' if '：' in next_line else ':'
-                    colon_idx = next_line.index(colon_char)
-                    key_text = next_line[:colon_idx].strip()
-                    value_text = next_line[colon_idx + 1:].strip()
-                    
-                    p = doc.add_paragraph()
-                    set_cell_shading(p)
-                    key_run = p.add_run(key_text + colon_char)
-                    key_run.font.bold = True
-                    if value_text:
-                        p.add_run(value_text)
-                    i += 1
-                else:
-                    p = doc.add_paragraph()
-                    p.add_run(next_line)
-                    i += 1
         elif '：' in line or ':' in line:
             colon_char = '：' if '：' in line else ':'
             colon_idx = line.index(colon_char)
@@ -102,6 +81,7 @@ def format_content(doc, content):
             i += 1
         else:
             p = doc.add_paragraph()
+            p.paragraph_format.first_line_indent = Pt(24)
             p.add_run(line)
             i += 1
 
