@@ -962,8 +962,8 @@ def get_unit_word(
             p = doc.add_paragraph()
             
             tab_stops = p.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(3.25), WD_TAB_ALIGNMENT.CENTER)
-            tab_stops.add_tab_stop(Inches(6.5), WD_TAB_ALIGNMENT.RIGHT)
+            tab_stops.add_tab_stop(Inches(2.5), WD_TAB_ALIGNMENT.CENTER)
+            tab_stops.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
             
             title_run = p.add_run(f"{idx}. {ep.title}")
             title_run.font.size = Pt(14)
