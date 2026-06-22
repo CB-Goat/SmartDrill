@@ -20,11 +20,11 @@ from urllib.parse import quote
 
 router = APIRouter(prefix="/admin", tags=["知识考点管理"])
 
-def set_cell_shading(paragraph, color='D9D9D9'):
-    pPr = paragraph._p.get_or_add_pPr()
+def set_run_shading(run, color='D9D9D9'):
+    rPr = run._r.get_or_add_rPr()
     shd = OxmlElement('w:shd')
     shd.set(qn('w:fill'), color)
-    pPr.append(shd)
+    rPr.append(shd)
 
 def remove_table_borders(table):
     tbl = table._tbl
@@ -73,9 +73,9 @@ def format_content(doc, content):
             value_text = line[colon_idx + 1:].strip()
             
             p = doc.add_paragraph()
-            set_cell_shading(p)
             key_run = p.add_run(key_text + colon_char)
             key_run.font.bold = True
+            set_run_shading(key_run)
             if value_text:
                 p.add_run(value_text)
             i += 1
