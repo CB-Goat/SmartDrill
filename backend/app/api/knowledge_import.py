@@ -761,3 +761,27 @@ def query_units(
         })
     
     return {"units": result}
+
+@router.get("/unit-detail/{unit_id}")
+def get_unit_detail(
+    unit_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).first()
+    exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == unit_id).all()
+    
+    return {
+        "knowledge": {
+            "id": knowledge.id,
+            "title": knowledge.title,
+            "content": knowledge.content
+        } if knowledge else None,
+        "exam_points": [{
+            "id": ep.id,
+            "title": ep.title,
+            "content": ep.content,
+            "exam_types": ep.exam_types,
+            "exam_frequency": ep.exam_frequency.value if ep.exam_frequency else None
+        } for ep in exam_points]
+    }

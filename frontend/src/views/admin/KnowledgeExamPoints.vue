@@ -42,6 +42,7 @@
             <th>单元名称</th>
             <th>知识点</th>
             <th>考点数</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -54,9 +55,44 @@
             <td>{{ unit.name }}</td>
             <td>{{ unit.has_knowledge ? '✓' : '✗' }}</td>
             <td>{{ unit.exam_point_count }}</td>
+            <td>
+              <button class="btn-link" @click="previewUnit(unit)">预览</button>
+            </td>
           </tr>
         </tbody>
       </table>
+    </div>
+    
+    <div v-if="previewVisible" class="modal-overlay" @click="previewVisible = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>{{ previewData?.unit_name }}</h3>
+          <button class="close-btn" @click="previewVisible = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="section">
+            <h4>知识点</h4>
+            <div v-if="previewData?.knowledge" class="content-box">
+              <pre>{{ previewData.knowledge.content || '暂无内容' }}</pre>
+            </div>
+            <div v-else class="empty-text">暂无知识点</div>
+          </div>
+          <div class="section">
+            <h4>考点（{{ previewData?.exam_points?.length || 0 }}个）</h4>
+            <div v-if="previewData?.exam_points?.length > 0">
+              <div v-for="(ep, idx) in previewData.exam_points" :key="ep.id" class="exam-point-item">
+                <div class="ep-header">
+                  <span class="ep-title">{{ idx + 1 }}. {{ ep.title }}</span>
+                  <span class="ep-tag" :class="'freq-' + ep.exam_frequency">{{ ep.exam_frequency }}</span>
+                  <span v-if="ep.exam_types" class="ep-types">{{ ep.exam_types }}</span>
+                </div>
+                <pre class="ep-content">{{ ep.content }}</pre>
+              </div>
+            </div>
+            <div v-else class="empty-text">暂无考点</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -75,6 +111,9 @@ const filterVersionId = ref(1)
 const filterGradeId = ref<number | null>(null)
 const filterSubjectId = ref<number | null>(null)
 const filterSemesterId = ref<number | null>(null)
+
+const previewVisible = ref(false)
+const previewData = ref<any>(null)
 
 const filteredGrades = computed(() => grades.value.filter(g => g.version_id === filterVersionId.value))
 const filteredSubjects = computed(() => filterGradeId.value ? subjects.value.filter(s => s.grade_id === filterGradeId.value) : subjects.value.filter(s => {
@@ -135,6 +174,23 @@ async function queryData() {
     queryResults.value = result.units || []
   } catch (error) {
     alert('查询失败')
+  }
+}
+
+async function previewUnit(unit: any) {
+  try {
+    const response = await fetch(`/api/admin/unit-detail/${unit.id}`, {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') }
+    })
+    const result = await response.json()
+    previewData.value = {
+      unit_name: `${unit.grade_name} ${unit.subject_name} ${unit.semester_name} - ${unit.name}`,
+      knowledge: result.knowledge,
+      exam_points: result.exam_points
+    }
+    previewVisible.value = true
+  } catch (error) {
+    alert('获取详情失败')
   }
 }
 
@@ -301,5 +357,162 @@ onMounted(onLoad)
 
 .data-table tbody tr:hover {
   background: #f5f5f5;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #1890ff;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
+.btn-link:hover {
+  color: #40a9ff;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #333;
+  border-left: 3px solid #1890ff;
+  padding-left: 12px;
+}
+
+.content-box {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.content-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.empty-text {
+  color: #999;
+  font-size: 14px;
+}
+
+.exam-point-item {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.ep-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ep-title {
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+}
+
+.ep-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fff;
+}
+
+.freq-必考 {
+  background: #f5222d;
+}
+
+.freq-常考 {
+  background: #fa8c16;
+}
+
+.freq-少考 {
+  background: #52c41a;
+}
+
+.ep-types {
+  color: #666;
+  font-size: 12px;
+}
+
+.ep-content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
 }
 </style>
