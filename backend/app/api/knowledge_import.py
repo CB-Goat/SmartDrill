@@ -974,10 +974,11 @@ def get_unit_word(
             p.add_run('\t')
             
             if ep.exam_types:
-                types_run = p.add_run(f"[{ep.exam_types}]")
+                types_run = p.add_run(f"{{{ep.exam_types}}}")
                 types_run.font.size = Pt(12)
                 types_run.font.name = '宋体'
                 types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                types_run.font.color.rgb = RGBColor(255, 105, 180)
             
             p.add_run('\t')
             
