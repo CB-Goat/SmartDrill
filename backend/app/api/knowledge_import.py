@@ -11,11 +11,86 @@ from openpyxl import load_workbook
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 from io import BytesIO
 from typing import List
 from urllib.parse import quote
 
 router = APIRouter(prefix="/admin", tags=["知识考点管理"])
+
+def set_cell_shading(paragraph, color='D9D9D9'):
+    pPr = paragraph._p.get_or_add_pPr()
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:fill'), color)
+    pPr.append(shd)
+
+def format_content(doc, content):
+    if not content:
+        return
+    
+    lines = content.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+        
+        if line.startswith('【') and '】' in line:
+            end_idx = line.index('】')
+            title_text = line[:end_idx + 1]
+            rest_text = line[end_idx + 1:].strip()
+            
+            p = doc.add_paragraph()
+            run = p.add_run(title_text)
+            run.font.bold = True
+            run.font.size = Pt(12)
+            if rest_text:
+                p.add_run(rest_text)
+            
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if not next_line:
+                    i += 1
+                    continue
+                if next_line.startswith('【') and '】' in next_line:
+                    break
+                if '：' in next_line or ':' in next_line:
+                    colon_char = '：' if '：' in next_line else ':'
+                    colon_idx = next_line.index(colon_char)
+                    key_text = next_line[:colon_idx].strip()
+                    value_text = next_line[colon_idx + 1:].strip()
+                    
+                    p = doc.add_paragraph()
+                    set_cell_shading(p)
+                    key_run = p.add_run(key_text + colon_char)
+                    key_run.font.bold = True
+                    if value_text:
+                        p.add_run(value_text)
+                    i += 1
+                else:
+                    p = doc.add_paragraph()
+                    p.add_run(next_line)
+                    i += 1
+        elif '：' in line or ':' in line:
+            colon_char = '：' if '：' in line else ':'
+            colon_idx = line.index(colon_char)
+            key_text = line[:colon_idx].strip()
+            value_text = line[colon_idx + 1:].strip()
+            
+            p = doc.add_paragraph()
+            set_cell_shading(p)
+            key_run = p.add_run(key_text + colon_char)
+            key_run.font.bold = True
+            if value_text:
+                p.add_run(value_text)
+            i += 1
+        else:
+            p = doc.add_paragraph()
+            p.add_run(line)
+            i += 1
 
 @router.get("/knowledge-exam-points")
 def get_knowledge_exam_points(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -846,14 +921,16 @@ def get_unit_word(
     style = doc.styles['Normal']
     style.font.name = '宋体'
     style.font.size = Pt(12)
+    style._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
     
     title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name}"
     
-
     title = doc.add_paragraph()
     title_run = title.add_run(title_text)
     title_run.font.size = Pt(18)
     title_run.font.bold = True
+    title_run.font.name = '宋体'
+    title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     doc.add_paragraph()
@@ -863,18 +940,17 @@ def get_unit_word(
     subtitle_run.font.size = Pt(16)
     subtitle_run.font.bold = True
     subtitle_run.font.color.rgb = RGBColor(0, 102, 204)
+    subtitle_run.font.name = '宋体'
+    subtitle_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
     
     doc.add_paragraph()
     
     if knowledge and knowledge.content:
-        for line in knowledge.content.split('\n'):
-            if line.strip():
-                p = doc.add_paragraph()
-                p.add_run(line.strip())
+        format_content(doc, knowledge.content)
     else:
         p = doc.add_paragraph()
-        p.add_run("暂无知识点内容")
-        p.runs[0].font.color.rgb = RGBColor(153, 153, 153)
+        run = p.add_run("暂无知识点内容")
+        run.font.color.rgb = RGBColor(153, 153, 153)
     
     doc.add_page_break()
     
@@ -883,45 +959,52 @@ def get_unit_word(
     subtitle2_run.font.size = Pt(16)
     subtitle2_run.font.bold = True
     subtitle2_run.font.color.rgb = RGBColor(0, 102, 204)
+    subtitle2_run.font.name = '宋体'
+    subtitle2_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
     
     doc.add_paragraph()
     
     if exam_points:
         for idx, ep in enumerate(exam_points, 1):
             ep_title = doc.add_paragraph()
-            ep_title_run = ep_title.add_run(f"{idx}. {ep.title}")
-            ep_title_run.font.size = Pt(14)
-            ep_title_run.font.bold = True
             
-            freq_tag = ""
+            title_run = ep_title.add_run(f"{idx}. {ep.title}")
+            title_run.font.size = Pt(14)
+            title_run.font.bold = True
+            title_run.font.name = '宋体'
+            title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            ep_title.add_run('\t')
+            
+            if ep.exam_types:
+                types_run = ep_title.add_run(f"[{ep.exam_types}]")
+                types_run.font.size = Pt(12)
+                types_run.font.name = '宋体'
+                types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            ep_title.add_run('\t')
+            
             if ep.exam_frequency:
-                freq_tag = f"[{ep.exam_frequency.value}]"
-                freq_run = ep_title.add_run(f"  {freq_tag}")
-                if ep.exam_frequency.value == '必考':
+                freq_text = ep.exam_frequency.value
+                freq_run = ep_title.add_run(f"[{freq_text}]")
+                freq_run.font.size = Pt(12)
+                freq_run.font.name = '宋体'
+                freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                if freq_text == '必考':
                     freq_run.font.color.rgb = RGBColor(255, 0, 0)
-                elif ep.exam_frequency.value == '常考':
+                elif freq_text == '常考':
                     freq_run.font.color.rgb = RGBColor(255, 153, 0)
                 else:
                     freq_run.font.color.rgb = RGBColor(0, 153, 0)
-                freq_run.font.size = Pt(12)
-            
-            if ep.exam_types:
-                types_p = doc.add_paragraph()
-                types_run = types_p.add_run(f"题型：{ep.exam_types}")
-                types_run.font.size = Pt(11)
-                types_run.font.color.rgb = RGBColor(102, 102, 102)
             
             if ep.content:
-                for line in ep.content.split('\n'):
-                    if line.strip():
-                        p = doc.add_paragraph()
-                        p.add_run(line.strip())
+                format_content(doc, ep.content)
             
             doc.add_paragraph()
     else:
         p = doc.add_paragraph()
-        p.add_run("暂无考点内容")
-        p.runs[0].font.color.rgb = RGBColor(153, 153, 153)
+        run = p.add_run("暂无考点内容")
+        run.font.color.rgb = RGBColor(153, 153, 153)
     
     buffer = BytesIO()
     doc.save(buffer)
