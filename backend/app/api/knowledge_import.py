@@ -197,10 +197,14 @@ async def import_knowledge_exam_points(
             
             unit = db.query(Unit).filter(
                 Unit.semester_id == semester.id,
-                Unit.name.like(f"%{last_unit_number}%")
+                Unit.unit_number == last_unit_number
             ).first()
             if not unit:
-                unit = Unit(semester_id=semester.id, name=f"{last_unit_number} {last_unit_name}")
+                unit = Unit(
+                    semester_id=semester.id,
+                    unit_number=last_unit_number,
+                    name=last_unit_name
+                )
                 db.add(unit)
                 db.commit()
                 db.refresh(unit)

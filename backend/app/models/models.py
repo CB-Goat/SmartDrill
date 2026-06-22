@@ -97,6 +97,7 @@ class Unit(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     semester_id = Column(Integer, ForeignKey("semesters.id", ondelete="CASCADE"), nullable=False)
+    unit_number = Column(String(20), nullable=False)
     name = Column(String(100), nullable=False)
     knowledge_points = relationship("KnowledgePoint", back_populates="unit", cascade="all, delete-orphan")
     semester = relationship("Semester", back_populates="units")

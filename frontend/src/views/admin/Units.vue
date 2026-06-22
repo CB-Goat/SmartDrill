@@ -26,6 +26,7 @@
           <th>年级</th>
           <th>科目</th>
           <th>学期</th>
+          <th>单元序号</th>
           <th>单元名称</th>
           <th>知识点数</th>
           <th>操作</th>
@@ -38,6 +39,7 @@
           <td>{{ getGradeName(item.semester_id) }}</td>
           <td>{{ getSubjectName(item.semester_id) }}</td>
           <td>{{ getSemesterName(item.semester_id) }}</td>
+          <td>{{ item.unit_number }}</td>
           <td>{{ item.name }}</td>
           <td>{{ item.knowledge_points?.length || 0 }}</td>
           <td>
@@ -58,8 +60,12 @@
             </select>
           </div>
           <div class="form-item">
+            <label>单元序号</label>
+            <input v-model="form.unit_number" required placeholder="如：第一单元、第二单元" />
+          </div>
+          <div class="form-item">
             <label>单元名称</label>
-            <input v-model="form.name" required placeholder="如：第一单元、第二单元" />
+            <input v-model="form.name" required placeholder="如：学校生活、金秋时节" />
           </div>
           <div class="form-actions">
             <button type="button" class="btn-default" @click="showForm = false">取消</button>
@@ -85,7 +91,7 @@ const filterVersionId = ref(1)
 const filterGradeId = ref(1)
 const filterSubjectId = ref(1)
 const filterSemesterId = ref(1)
-const form = reactive({ id: 0, semester_id: 1, name: '' })
+const form = reactive({ id: 0, semester_id: 1, unit_number: '', name: '' })
 
 const filteredGrades = computed(() => {
   return grades.value.filter(g => g.version_id === filterVersionId.value)
@@ -181,7 +187,7 @@ function getSemesterName(semesterId: number) {
 }
 
 function openAdd() {
-  Object.assign(form, { id: 0, semester_id: filterSemesterId.value, name: '' })
+  Object.assign(form, { id: 0, semester_id: filterSemesterId.value, unit_number: '', name: '' })
   showForm.value = true
 }
 
