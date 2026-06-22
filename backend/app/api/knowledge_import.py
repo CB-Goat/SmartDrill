@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
@@ -7,6 +8,9 @@ from app.models.models import (
 )
 from app.utils.auth import get_current_admin
 from openpyxl import load_workbook
+from docx import Document
+from docx.shared import Pt, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from io import BytesIO
 from typing import List
 
@@ -785,3 +789,114 @@ def get_unit_detail(
             "exam_frequency": ep.exam_frequency.value if ep.exam_frequency else None
         } for ep in exam_points]
     }
+
+@router.get("/unit-word/{unit_id}")
+def get_unit_word(
+    unit_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    
+    semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
+    subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
+    grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
+    
+    knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).first()
+    exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == unit_id).all()
+    
+    doc = Document()
+    
+    style = doc.styles['Normal']
+    style.font.name = '宋体'
+    style.font.size = Pt(12)
+    
+    title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name}"
+    
+    doc.add_page_break()
+    title = doc.add_paragraph()
+    title_run = title.add_run(title_text)
+    title_run.font.size = Pt(18)
+    title_run.font.bold = True
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    doc.add_paragraph()
+    
+    subtitle = doc.add_paragraph()
+    subtitle_run = subtitle.add_run("知识点")
+    subtitle_run.font.size = Pt(16)
+    subtitle_run.font.bold = True
+    subtitle_run.font.color.rgb = RGBColor(0, 102, 204)
+    
+    doc.add_paragraph()
+    
+    if knowledge and knowledge.content:
+        for line in knowledge.content.split('\n'):
+            if line.strip():
+                p = doc.add_paragraph()
+                p.add_run(line.strip())
+    else:
+        p = doc.add_paragraph()
+        p.add_run("暂无知识点内容")
+        p.runs[0].font.color.rgb = RGBColor(153, 153, 153)
+    
+    doc.add_page_break()
+    
+    subtitle2 = doc.add_paragraph()
+    subtitle2_run = subtitle2.add_run("考点")
+    subtitle2_run.font.size = Pt(16)
+    subtitle2_run.font.bold = True
+    subtitle2_run.font.color.rgb = RGBColor(0, 102, 204)
+    
+    doc.add_paragraph()
+    
+    if exam_points:
+        for idx, ep in enumerate(exam_points, 1):
+            ep_title = doc.add_paragraph()
+            ep_title_run = ep_title.add_run(f"{idx}. {ep.title}")
+            ep_title_run.font.size = Pt(14)
+            ep_title_run.font.bold = True
+            
+            freq_tag = ""
+            if ep.exam_frequency:
+                freq_tag = f"[{ep.exam_frequency.value}]"
+                freq_run = ep_title.add_run(f"  {freq_tag}")
+                if ep.exam_frequency.value == '必考':
+                    freq_run.font.color.rgb = RGBColor(255, 0, 0)
+                elif ep.exam_frequency.value == '常考':
+                    freq_run.font.color.rgb = RGBColor(255, 153, 0)
+                else:
+                    freq_run.font.color.rgb = RGBColor(0, 153, 0)
+                freq_run.font.size = Pt(12)
+            
+            if ep.exam_types:
+                types_p = doc.add_paragraph()
+                types_run = types_p.add_run(f"题型：{ep.exam_types}")
+                types_run.font.size = Pt(11)
+                types_run.font.color.rgb = RGBColor(102, 102, 102)
+            
+            if ep.content:
+                for line in ep.content.split('\n'):
+                    if line.strip():
+                        p = doc.add_paragraph()
+                        p.add_run(line.strip())
+            
+            doc.add_paragraph()
+    else:
+        p = doc.add_paragraph()
+        p.add_run("暂无考点内容")
+        p.runs[0].font.color.rgb = RGBColor(153, 153, 153)
+    
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    
+    filename = f"{title_text}.docx"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+    )

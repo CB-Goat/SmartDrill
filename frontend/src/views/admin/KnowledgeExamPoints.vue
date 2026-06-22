@@ -57,6 +57,7 @@
             <td>{{ unit.exam_point_count }}</td>
             <td>
               <button class="btn-link" @click="previewUnit(unit)">预览</button>
+              <button class="btn-link" @click="downloadWord(unit)" style="margin-left: 8px">下载</button>
             </td>
           </tr>
         </tbody>
@@ -64,32 +65,43 @@
     </div>
     
     <div v-if="previewVisible" class="modal-overlay" @click="previewVisible = false">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content word-preview" @click.stop>
         <div class="modal-header">
           <h3>{{ previewData?.unit_name }}</h3>
-          <button class="close-btn" @click="previewVisible = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="section">
-            <h4>知识点</h4>
-            <div v-if="previewData?.knowledge" class="content-box">
-              <pre>{{ previewData.knowledge.content || '暂无内容' }}</pre>
-            </div>
-            <div v-else class="empty-text">暂无知识点</div>
+          <div>
+            <button class="btn-primary" @click="downloadCurrentWord" style="margin-right: 8px">下载Word</button>
+            <button class="close-btn" @click="previewVisible = false">×</button>
           </div>
-          <div class="section">
-            <h4>考点（{{ previewData?.exam_points?.length || 0 }}个）</h4>
-            <div v-if="previewData?.exam_points?.length > 0">
-              <div v-for="(ep, idx) in previewData.exam_points" :key="ep.id" class="exam-point-item">
-                <div class="ep-header">
-                  <span class="ep-title">{{ idx + 1 }}. {{ ep.title }}</span>
-                  <span class="ep-tag" :class="'freq-' + ep.exam_frequency">{{ ep.exam_frequency }}</span>
-                  <span v-if="ep.exam_types" class="ep-types">{{ ep.exam_types }}</span>
-                </div>
-                <pre class="ep-content">{{ ep.content }}</pre>
+        </div>
+        <div class="modal-body word-container">
+          <div class="word-page">
+            <div class="page-title">{{ previewData?.unit_name }}</div>
+            <div class="section-title">知识点</div>
+            <div class="content-area">
+              <div v-if="previewData?.knowledge?.content" class="knowledge-content">
+                <p v-for="(line, idx) in previewData.knowledge.content.split('\n')" :key="idx">{{ line }}</p>
               </div>
+              <div v-else class="empty-hint">暂无知识点内容</div>
             </div>
-            <div v-else class="empty-text">暂无考点</div>
+          </div>
+          <div class="word-page">
+            <div class="section-title">考点</div>
+            <div class="content-area">
+              <div v-if="previewData?.exam_points?.length > 0" class="exam-points-list">
+                <div v-for="(ep, idx) in previewData.exam_points" :key="ep.id" class="exam-item">
+                  <div class="exam-title-row">
+                    <span class="exam-num">{{ idx + 1 }}.</span>
+                    <span class="exam-title">{{ ep.title }}</span>
+                    <span v-if="ep.exam_frequency" class="freq-badge" :class="'freq-' + ep.exam_frequency">{{ ep.exam_frequency }}</span>
+                  </div>
+                  <div v-if="ep.exam_types" class="exam-types">题型：{{ ep.exam_types }}</div>
+                  <div v-if="ep.content" class="exam-content">
+                    <p v-for="(line, lineIdx) in ep.content.split('\n')" :key="lineIdx">{{ line }}</p>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="empty-hint">暂无考点内容</div>
+            </div>
           </div>
         </div>
       </div>
@@ -184,6 +196,7 @@ async function previewUnit(unit: any) {
     })
     const result = await response.json()
     previewData.value = {
+      unit_id: unit.id,
       unit_name: `${unit.grade_name} ${unit.subject_name} ${unit.semester_name} - ${unit.name}`,
       knowledge: result.knowledge,
       exam_points: result.exam_points
@@ -191,6 +204,29 @@ async function previewUnit(unit: any) {
     previewVisible.value = true
   } catch (error) {
     alert('获取详情失败')
+  }
+}
+
+async function downloadWord(unit: any) {
+  const token = localStorage.getItem('admin_token')
+  const url = `/api/admin/unit-word/${unit.id}`
+  const response = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  const blob = await response.blob()
+  const downloadUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = downloadUrl
+  a.download = `${unit.grade_name} ${unit.subject_name} ${unit.semester_name} - ${unit.name}.docx`
+  a.click()
+  window.URL.revokeObjectURL(downloadUrl)
+}
+
+async function downloadCurrentWord() {
+  if (!previewData.value) return
+  const unit = queryResults.value.find(u => u.id === previewData.value.unit_id)
+  if (unit) {
+    await downloadWord(unit)
   }
 }
 
@@ -514,5 +550,111 @@ onMounted(onLoad)
   font-size: 14px;
   line-height: 1.6;
   color: #333;
+}
+
+.word-preview {
+  max-width: 1000px;
+}
+
+.word-container {
+  background: #f0f0f0;
+  padding: 20px;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+}
+
+.word-page {
+  background: #fff;
+  width: 595px;
+  min-height: 842px;
+  padding: 72px 90px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 30px;
+  color: #000;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #0066cc;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #0066cc;
+}
+
+.content-area {
+  font-size: 12pt;
+  line-height: 1.8;
+  color: #000;
+}
+
+.knowledge-content p,
+.exam-content p {
+  margin: 0 0 8px 0;
+  text-indent: 2em;
+}
+
+.empty-hint {
+  color: #999;
+  font-style: italic;
+}
+
+.exam-points-list {
+  margin-top: 10px;
+}
+
+.exam-item {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed #e0e0e0;
+}
+
+.exam-item:last-child {
+  border-bottom: none;
+}
+
+.exam-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.exam-num {
+  font-weight: bold;
+  color: #000;
+}
+
+.exam-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000;
+  flex: 1;
+}
+
+.freq-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fff;
+  font-weight: normal;
+}
+
+.exam-types {
+  font-size: 11pt;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.exam-content {
+  margin-top: 8px;
 }
 </style>
