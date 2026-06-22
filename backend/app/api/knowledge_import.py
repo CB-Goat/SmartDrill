@@ -137,7 +137,7 @@ async def import_knowledge_exam_points(
             
             grade_name = str(row[0]).strip() if row[0] else None
             semester_name = str(row[1]).strip() if row[1] else None
-            unit_number = str(row[2]).strip() if row[2] else None
+            unit_number_text = str(row[2]).strip() if row[2] else None
             unit_name = str(row[3]).strip() if row[3] else None
             knowledge_content = str(row[4]).strip() if row[4] else None
             exam_content = str(row[5]).strip() if row[5] else None
@@ -148,8 +148,17 @@ async def import_knowledge_exam_points(
                 last_grade = grade_name
             if semester_name:
                 last_semester = semester_name
-            if unit_number:
-                last_unit_number = unit_number
+            if unit_number_text:
+                chinese_nums = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+                for cn, num in chinese_nums.items():
+                    if cn in unit_number_text:
+                        last_unit_number = num
+                        break
+                if not last_unit_number:
+                    import re
+                    match = re.search(r'\d+', unit_number_text)
+                    if match:
+                        last_unit_number = int(match.group())
             if unit_name:
                 last_unit_name = unit_name
             if knowledge_content:
@@ -203,7 +212,7 @@ async def import_knowledge_exam_points(
                 unit = Unit(
                     semester_id=semester.id,
                     unit_number=last_unit_number,
-                    name=last_unit_name
+                    name=f"{unit_number_text} {last_unit_name}"
                 )
                 db.add(unit)
                 db.commit()
