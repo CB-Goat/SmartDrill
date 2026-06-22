@@ -7,6 +7,7 @@
         <button class="btn-default" @click="clearKnowledge" style="margin-right: 8px; color: #fa8c16">知识点清除</button>
         <button class="btn-primary" @click="importExamPoints" style="margin-right: 8px">考点导入</button>
         <button class="btn-default" @click="clearExamPoints" style="margin-right: 8px; color: #f5222d">考点清除</button>
+        <button class="btn-default" @click="fixExamContent" style="margin-right: 8px; color: #52c41a">修复考点</button>
       </div>
     </div>
     
@@ -339,6 +340,21 @@ async function clearExamPoints() {
     alert(result.message)
   } catch (error) {
     alert('清除失败')
+  }
+}
+
+async function fixExamContent() {
+  if (!confirm('确定修复考点内容吗？\n将根据冒号分隔标题和内容')) return
+  
+  try {
+    const response = await fetch('/api/admin/clean-exam-content', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') }
+    })
+    const result = await response.json()
+    alert(result.message)
+  } catch (error) {
+    alert('修复失败')
   }
 }
 

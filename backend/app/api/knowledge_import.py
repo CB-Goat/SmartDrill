@@ -13,6 +13,7 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from io import BytesIO
 from typing import List
+from urllib.parse import quote
 
 router = APIRouter(prefix="/admin", tags=["知识考点管理"])
 
@@ -256,9 +257,19 @@ async def import_knowledge_exam_points(
                 ).first()
                 
                 if not existing_ep:
-                    lines = exam_content.split('\n')
-                    exam_title = lines[0][:50] if lines else exam_content[:50]
-                    exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
+                    if '：' in exam_content:
+                        colon_idx = exam_content.index('：')
+                        exam_title = exam_content[:colon_idx].strip()
+                        exam_content_clean = exam_content[colon_idx + 1:].strip()
+                    elif ':' in exam_content:
+                        colon_idx = exam_content.index(':')
+                        exam_title = exam_content[:colon_idx].strip()
+                        exam_content_clean = exam_content[colon_idx + 1:].strip()
+                    else:
+                        lines = exam_content.split('\n')
+                        exam_title = lines[0][:50] if lines else exam_content[:50]
+                        exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
+                    
                     freq = '必考' if exam_frequency in ['必考', '必考重点'] else ('常考' if exam_frequency == '常考' else '少考')
                     ep = ExamPoint(
                         unit_id=unit.id,
@@ -503,9 +514,19 @@ async def import_exam_points(
                 db.delete(existing_ep)
                 db.commit()
             
-            lines = exam_content.split('\n')
-            exam_title = lines[0][:50] if lines else exam_content[:50]
-            exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
+            if '：' in exam_content:
+                colon_idx = exam_content.index('：')
+                exam_title = exam_content[:colon_idx].strip()
+                exam_content_clean = exam_content[colon_idx + 1:].strip()
+            elif ':' in exam_content:
+                colon_idx = exam_content.index(':')
+                exam_title = exam_content[:colon_idx].strip()
+                exam_content_clean = exam_content[colon_idx + 1:].strip()
+            else:
+                lines = exam_content.split('\n')
+                exam_title = lines[0][:50] if lines else exam_content[:50]
+                exam_content_clean = '\n'.join(lines[1:]) if len(lines) > 1 else exam_content
+            
             freq = '必考' if exam_frequency in ['必考', '必考重点'] else ('常考' if exam_frequency == '常考' else '少考')
             
             ep = ExamPoint(
@@ -601,13 +622,26 @@ def clean_exam_content(admin: User = Depends(get_current_admin), db: Session = D
     
     for ep in all_eps:
         if ep.content and ep.title:
-            lines = ep.content.split('\n')
-            if lines and lines[0].strip() == ep.title.strip():
-                ep.content = '\n'.join(lines[1:])
-                cleaned_count += 1
+            if '：' in ep.content:
+                colon_idx = ep.content.index('：')
+                new_title = ep.content[:colon_idx].strip()
+                new_content = ep.content[colon_idx + 1:].strip()
+                if new_title != ep.title or new_content != ep.content:
+                    ep.title = new_title
+                    ep.content = new_content
+                    cleaned_count += 1
+            elif ':' in ep.content:
+                colon_idx = ep.content.index(':')
+                new_title = ep.content[:colon_idx].strip()
+                new_content = ep.content[colon_idx + 1:].strip()
+                if new_title != ep.title or new_content != ep.content:
+                    ep.title = new_title
+                    ep.content = new_content
+                    cleaned_count += 1
     
     db.commit()
     return {"message": f"清理完成，修复了{cleaned_count}条考点内容"}
+
 
 @router.post("/import-units")
 async def import_units(
@@ -894,9 +928,10 @@ def get_unit_word(
     buffer.seek(0)
     
     filename = f"{title_text}.docx"
+    encoded_filename = quote(filename)
     
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        headers={"Content-Disposition": f"attachment; filename=\"{encoded_filename}\""}
     )
