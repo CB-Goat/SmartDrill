@@ -327,3 +327,108 @@ def clean_exam_content(admin: User = Depends(get_current_admin), db: Session = D
     
     db.commit()
     return {"message": f"清理完成，修复了{cleaned_count}条考点内容"}
+
+@router.post("/import-units")
+async def import_units(
+    file: UploadFile = File(...),
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="只支持Excel文件")
+    
+    contents = await file.read()
+    try:
+        wb = load_workbook(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Excel文件解析失败: {str(e)}")
+    
+    imported_count = 0
+    skipped_count = 0
+    import_log = []
+    
+    version = db.query(Version).filter(Version.name == "人教版").first()
+    if not version:
+        version = Version(name="人教版")
+        db.add(version)
+        db.commit()
+        db.refresh(version)
+    
+    for sheet_name in wb.sheetnames:
+        sheet = wb[sheet_name]
+        import_log.append(f"📄 处理Sheet: {sheet_name}")
+        
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+            if not row or not row[0]:
+                continue
+            
+            subject_name = str(row[0]).strip() if row[0] else None
+            grade_name = str(row[1]).strip() if row[1] else None
+            semester_name = str(row[2]).strip() if row[2] else None
+            unit_number = int(row[3]) if row[3] else None
+            unit_number_text = str(row[4]).strip() if row[4] else None
+            unit_name = str(row[5]).strip() if row[5] else None
+            
+            if not all([subject_name, grade_name, semester_name, unit_number, unit_number_text, unit_name]):
+                skipped_count += 1
+                import_log.append(f"  ✗ 行{row_idx}: 缺少必要字段")
+                continue
+            
+            grade = db.query(Grade).filter(
+                Grade.version_id == version.id,
+                Grade.name == grade_name
+            ).first()
+            if not grade:
+                grade = Grade(version_id=version.id, name=grade_name)
+                db.add(grade)
+                db.commit()
+                db.refresh(grade)
+            
+            subject = db.query(Subject).filter(
+                Subject.grade_id == grade.id,
+                Subject.name == subject_name
+            ).first()
+            if not subject:
+                subject = Subject(grade_id=grade.id, name=subject_name)
+                db.add(subject)
+                db.commit()
+                db.refresh(subject)
+            
+            semester = db.query(Semester).filter(
+                Semester.subject_id == subject.id,
+                Semester.name == semester_name
+            ).first()
+            if not semester:
+                semester = Semester(subject_id=subject.id, name=semester_name)
+                db.add(semester)
+                db.commit()
+                db.refresh(semester)
+            
+            unit = db.query(Unit).filter(
+                Unit.semester_id == semester.id,
+                Unit.unit_number == unit_number
+            ).first()
+            
+            if not unit:
+                unit = Unit(
+                    semester_id=semester.id,
+                    unit_number=unit_number,
+                    name=f"{unit_number_text} {unit_name}"
+                )
+                db.add(unit)
+                db.commit()
+                db.refresh(unit)
+                imported_count += 1
+                import_log.append(f"  ✓ 行{row_idx}: {subject_name} {grade_name} {semester_name} - {unit_number_text} {unit_name}")
+            else:
+                old_name = unit.name
+                unit.name = f"{unit_number_text} {unit_name}"
+                db.commit()
+                import_log.append(f"  ↻ 行{row_idx}: 更新 {old_name} → {unit.name}")
+    
+    return {
+        "message": f"导入完成",
+        "imported": imported_count,
+        "skipped": skipped_count,
+        "log": import_log[:50]
+    }
