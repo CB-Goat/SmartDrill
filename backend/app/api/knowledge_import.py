@@ -303,50 +303,27 @@ async def import_knowledge(
     
     for sheet_name in wb.sheetnames:
         sheet = wb[sheet_name]
-        subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
         import_log.append(f"📄 处理Sheet: {sheet_name}")
         
-        last_grade = None
-        last_semester = None
-        last_unit_number = None
-        last_unit_name = None
-        last_knowledge_content = None
-        
         for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row:
+            if not row or not row[0]:
                 continue
             
-            grade_name = str(row[0]).strip() if row[0] else None
-            semester_name = str(row[1]).strip() if row[1] else None
-            unit_number_text = str(row[2]).strip() if row[2] else None
-            unit_name = str(row[3]).strip() if row[3] else None
-            knowledge_content = str(row[4]).strip() if row[4] else None
+            subject_name = str(row[0]).strip() if row[0] else None
+            grade_name = str(row[1]).strip() if row[1] else None
+            semester_name = str(row[2]).strip() if row[2] else None
+            unit_number = int(row[3]) if row[3] else None
+            unit_number_text = str(row[4]).strip() if row[4] else None
+            unit_name = str(row[5]).strip() if row[5] else None
+            knowledge_content = str(row[6]).strip() if len(row) > 6 and row[6] else None
             
-            if grade_name:
-                last_grade = grade_name
-            if semester_name:
-                last_semester = semester_name
-            if unit_number_text:
-                chinese_nums = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
-                for cn, num in chinese_nums.items():
-                    if cn in unit_number_text:
-                        last_unit_number = num
-                        break
-                if not last_unit_number:
-                    import re
-                    match = re.search(r'\d+', unit_number_text)
-                    if match:
-                        last_unit_number = int(match.group())
-            if unit_name:
-                last_unit_name = unit_name
-            if knowledge_content:
-                last_knowledge_content = knowledge_content
-            
-            if not all([last_grade, last_semester, last_unit_number, last_unit_name]):
+            if not all([subject_name, grade_name, semester_name, unit_number, unit_name, knowledge_content]):
+                import_log.append(f"  ✗ 行{row_idx}: 缺少必要字段")
                 continue
             
-            grade_obj = db.query(Grade).filter(Grade.name == last_grade).first()
+            grade_obj = db.query(Grade).filter(Grade.name == grade_name).first()
             if not grade_obj:
+                import_log.append(f"  ✗ 行{row_idx}: 年级'{grade_name}'不存在")
                 continue
             if grade_id and grade_obj.id != grade_id:
                 continue
@@ -356,24 +333,27 @@ async def import_knowledge(
                 Subject.name == subject_name
             ).first()
             if not subject_obj:
+                import_log.append(f"  ✗ 行{row_idx}: 科目'{subject_name}'不存在")
                 continue
             if subject_id and subject_obj.id != subject_id:
                 continue
             
             semester_obj = db.query(Semester).filter(
                 Semester.subject_id == subject_obj.id,
-                Semester.name == last_semester
+                Semester.name == semester_name
             ).first()
             if not semester_obj:
+                import_log.append(f"  ✗ 行{row_idx}: 学期'{semester_name}'不存在")
                 continue
             if semester_id and semester_obj.id != semester_id:
                 continue
             
             unit = db.query(Unit).filter(
                 Unit.semester_id == semester_obj.id,
-                Unit.unit_number == last_unit_number
+                Unit.unit_number == unit_number
             ).first()
             if not unit:
+                import_log.append(f"  ✗ 行{row_idx}: 单元序号{unit_number}不存在")
                 continue
             
             kp = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first()
@@ -383,13 +363,13 @@ async def import_knowledge(
             
             kp = KnowledgePoint(
                 unit_id=unit.id,
-                title=f"{last_unit_name} - 知识点",
-                content=last_knowledge_content or ""
+                title=f"{unit_name} - 知识点",
+                content=knowledge_content
             )
             db.add(kp)
             db.commit()
             imported_count += 1
-            import_log.append(f"  ✓ {last_grade} {subject_name} {last_semester} - {last_unit_name}")
+            import_log.append(f"  ✓ {grade_name} {subject_name} {semester_name} - {unit_name}")
     
     return {"message": f"导入完成，共{imported_count}个知识点", "log": import_log[:50]}
 
@@ -455,49 +435,29 @@ async def import_exam_points(
     
     for sheet_name in wb.sheetnames:
         sheet = wb[sheet_name]
-        subject_name = sheet_name.replace('小学', '').replace('初中', '').strip()
         import_log.append(f"📄 处理Sheet: {sheet_name}")
         
-        last_grade = None
-        last_semester = None
-        last_unit_number = None
-        last_unit_name = None
-        
         for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-            if not row:
+            if not row or not row[0]:
                 continue
             
-            grade_name = str(row[0]).strip() if row[0] else None
-            semester_name = str(row[1]).strip() if row[1] else None
-            unit_number_text = str(row[2]).strip() if row[2] else None
-            unit_name = str(row[3]).strip() if row[3] else None
-            exam_content = str(row[5]).strip() if row[5] else None
-            exam_types = str(row[6]).strip() if row[6] else None
-            exam_frequency = str(row[7]).strip() if row[7] else '常考'
+            subject_name = str(row[0]).strip() if row[0] else None
+            grade_name = str(row[1]).strip() if row[1] else None
+            semester_name = str(row[2]).strip() if row[2] else None
+            unit_number = int(row[3]) if row[3] else None
+            unit_number_text = str(row[4]).strip() if row[4] else None
+            unit_name = str(row[5]).strip() if row[5] else None
+            exam_content = str(row[6]).strip() if len(row) > 6 and row[6] else None
+            exam_types = str(row[7]).strip() if len(row) > 7 and row[7] else None
+            exam_frequency = '常考'
             
-            if grade_name:
-                last_grade = grade_name
-            if semester_name:
-                last_semester = semester_name
-            if unit_number_text:
-                chinese_nums = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
-                for cn, num in chinese_nums.items():
-                    if cn in unit_number_text:
-                        last_unit_number = num
-                        break
-                if not last_unit_number:
-                    import re
-                    match = re.search(r'\d+', unit_number_text)
-                    if match:
-                        last_unit_number = int(match.group())
-            if unit_name:
-                last_unit_name = unit_name
-            
-            if not all([last_grade, last_semester, last_unit_number, exam_content]):
+            if not all([subject_name, grade_name, semester_name, unit_number, exam_content]):
+                import_log.append(f"  ✗ 行{row_idx}: 缺少必要字段")
                 continue
             
-            grade_obj = db.query(Grade).filter(Grade.name == last_grade).first()
+            grade_obj = db.query(Grade).filter(Grade.name == grade_name).first()
             if not grade_obj:
+                import_log.append(f"  ✗ 行{row_idx}: 年级'{grade_name}'不存在")
                 continue
             if grade_id and grade_obj.id != grade_id:
                 continue
@@ -507,24 +467,27 @@ async def import_exam_points(
                 Subject.name == subject_name
             ).first()
             if not subject_obj:
+                import_log.append(f"  ✗ 行{row_idx}: 科目'{subject_name}'不存在")
                 continue
             if subject_id and subject_obj.id != subject_id:
                 continue
             
             semester_obj = db.query(Semester).filter(
                 Semester.subject_id == subject_obj.id,
-                Semester.name == last_semester
+                Semester.name == semester_name
             ).first()
             if not semester_obj:
+                import_log.append(f"  ✗ 行{row_idx}: 学期'{semester_name}'不存在")
                 continue
             if semester_id and semester_obj.id != semester_id:
                 continue
             
             unit = db.query(Unit).filter(
                 Unit.semester_id == semester_obj.id,
-                Unit.unit_number == last_unit_number
+                Unit.unit_number == unit_number
             ).first()
             if not unit:
+                import_log.append(f"  ✗ 行{row_idx}: 单元序号{unit_number}不存在")
                 continue
             
             existing_ep = db.query(ExamPoint).filter(
@@ -551,7 +514,7 @@ async def import_exam_points(
             db.add(ep)
             db.commit()
             imported_count += 1
-            import_log.append(f"  ✓ {last_grade} {subject_name} {last_semester} - {exam_title[:30]}")
+            import_log.append(f"  ✓ {grade_name} {subject_name} {semester_name} - {exam_title[:30]}")
     
     return {"message": f"导入完成，共{imported_count}个考点", "log": import_log[:50]}
 
