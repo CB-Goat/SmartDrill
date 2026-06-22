@@ -9,8 +9,9 @@ from app.models.models import (
 from app.utils.auth import get_current_admin
 from openpyxl import load_workbook
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, Inches, RGBColor, Twips
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from io import BytesIO
@@ -24,6 +25,18 @@ def set_cell_shading(paragraph, color='D9D9D9'):
     shd = OxmlElement('w:shd')
     shd.set(qn('w:fill'), color)
     pPr.append(shd)
+
+def remove_table_borders(table):
+    tbl = table._tbl
+    tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement('w:tblPr')
+    tblBorders = OxmlElement('w:tblBorders')
+    for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+        border = OxmlElement(f'w:{border_name}')
+        border.set(qn('w:val'), 'nil')
+        tblBorders.append(border)
+    tblPr.append(tblBorders)
+    if tbl.tblPr is None:
+        tbl.insert(0, tblPr)
 
 def format_content(doc, content):
     if not content:
@@ -966,27 +979,36 @@ def get_unit_word(
     
     if exam_points:
         for idx, ep in enumerate(exam_points, 1):
-            ep_title = doc.add_paragraph()
+            table = doc.add_table(rows=1, cols=3)
+            table.autofit = False
+            table.allow_autofit = False
+            remove_table_borders(table)
             
-            title_run = ep_title.add_run(f"{idx}. {ep.title}")
+            cells = table.rows[0].cells
+            cells[0].width = Inches(3.5)
+            cells[1].width = Inches(2.5)
+            cells[2].width = Inches(1.5)
+            
+            cell0_para = cells[0].paragraphs[0]
+            title_run = cell0_para.add_run(f"{idx}. {ep.title}")
             title_run.font.size = Pt(14)
             title_run.font.bold = True
             title_run.font.name = '宋体'
             title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
             
-            ep_title.add_run('\t')
-            
+            cell1_para = cells[1].paragraphs[0]
+            cell1_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             if ep.exam_types:
-                types_run = ep_title.add_run(f"[{ep.exam_types}]")
+                types_run = cell1_para.add_run(f"[{ep.exam_types}]")
                 types_run.font.size = Pt(12)
                 types_run.font.name = '宋体'
                 types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
             
-            ep_title.add_run('\t')
-            
+            cell2_para = cells[2].paragraphs[0]
+            cell2_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             if ep.exam_frequency:
                 freq_text = ep.exam_frequency.value
-                freq_run = ep_title.add_run(f"[{freq_text}]")
+                freq_run = cell2_para.add_run(f"[{freq_text}]")
                 freq_run.font.size = Pt(12)
                 freq_run.font.name = '宋体'
                 freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
