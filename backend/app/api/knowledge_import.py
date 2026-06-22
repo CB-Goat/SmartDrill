@@ -959,45 +959,35 @@ def get_unit_word(
     
     if exam_points:
         for idx, ep in enumerate(exam_points, 1):
-            table = doc.add_table(rows=1, cols=3)
-            table.autofit = False
-            table.allow_autofit = False
-            remove_table_borders(table)
+            p = doc.add_paragraph()
             
-            cells = table.rows[0].cells
-            cells[0].width = Inches(3.5)
-            cells[1].width = Inches(2.5)
-            cells[2].width = Inches(1.5)
-            
-            cell0_para = cells[0].paragraphs[0]
-            title_run = cell0_para.add_run(f"{idx}. {ep.title}")
+            title_run = p.add_run(f"{idx}. {ep.title}")
             title_run.font.size = Pt(14)
             title_run.font.bold = True
             title_run.font.name = '宋体'
             title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
             
-            cell1_para = cells[1].paragraphs[0]
-            cell1_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            if ep.exam_types:
-                types_run = cell1_para.add_run(f"[{ep.exam_types}]")
-                types_run.font.size = Pt(12)
-                types_run.font.name = '宋体'
-                types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            types_text = f"[{ep.exam_types}]" if ep.exam_types else ""
+            freq_text = f"[{ep.exam_frequency.value}]" if ep.exam_frequency else ""
             
-            cell2_para = cells[2].paragraphs[0]
-            cell2_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            if ep.exam_frequency:
-                freq_text = ep.exam_frequency.value
-                freq_run = cell2_para.add_run(f"[{freq_text}]")
-                freq_run.font.size = Pt(12)
-                freq_run.font.name = '宋体'
-                freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-                if freq_text == '必考':
-                    freq_run.font.color.rgb = RGBColor(255, 0, 0)
-                elif freq_text == '常考':
-                    freq_run.font.color.rgb = RGBColor(255, 153, 0)
-                else:
-                    freq_run.font.color.rgb = RGBColor(0, 153, 0)
+            if types_text or freq_text:
+                p.add_run("  ")
+                meta_run = p.add_run(f"{types_text}  {freq_text}")
+                meta_run.font.size = Pt(12)
+                meta_run.font.name = '宋体'
+                meta_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                
+                if ep.exam_frequency:
+                    if ep.exam_frequency.value == '必考':
+                        freq_start = meta_run.text.rfind('[')
+                        if freq_start >= 0:
+                            pass
+                    if ep.exam_frequency.value == '必考':
+                        meta_run.font.color.rgb = RGBColor(255, 0, 0)
+                    elif ep.exam_frequency.value == '常考':
+                        meta_run.font.color.rgb = RGBColor(255, 153, 0)
+                    else:
+                        meta_run.font.color.rgb = RGBColor(0, 153, 0)
             
             if ep.content:
                 format_content(doc, ep.content)
