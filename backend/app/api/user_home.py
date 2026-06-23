@@ -50,19 +50,17 @@ def calculate_current_grade(db, user):
     
     return (current_grade or set_grade), months_in_grade, semester
 
-def calculate_current_unit_number(months_in_grade):
-    if months_in_grade < 2:
-        return 1
-    elif months_in_grade < 4:
-        return 2
-    elif months_in_grade < 6:
-        return 3
-    elif months_in_grade < 8:
-        return 4
-    elif months_in_grade < 10:
-        return 5
+def calculate_current_unit_number(current_month, semester):
+    if semester == '上册':
+        if current_month >= 9:
+            return current_month - 8
+        else:
+            return current_month + 4
     else:
-        return 6
+        if current_month >= 2:
+            return current_month - 1
+        else:
+            return 6
 
 def set_run_shading(run, color='D9D9D9'):
     rPr = run._r.get_or_add_rPr()
