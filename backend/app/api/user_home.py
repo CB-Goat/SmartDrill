@@ -159,70 +159,38 @@ def get_home_data(
         if not all_units:
             continue
         
-        nearby_units = []
+        units_list = []
         for unit in all_units:
-            unit_num = int(unit.unit_number) if isinstance(unit.unit_number, str) else unit.unit_number
-            if abs(unit_num - current_unit_num) <= 1:
-                has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
-                has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
-                review_downloaded = db.query(Order).filter(
-                    Order.user_id == user.id,
-                    Order.order_type == 'knowledge',
-                    Order.title.like(f"%{unit.name}%")
-                ).first() is not None
-                practice_downloaded = db.query(Order).filter(
-                    Order.user_id == user.id,
-                    Order.order_type == 'practice',
-                    Order.title.like(f"%{unit.name}%")
-                ).first() is not None
-                nearby_units.append({
-                    "id": unit.id,
-                    "name": unit.name,
-                    "unit_number": unit.unit_number,
-                    "semester_name": target_semester.name,
-                    "has_knowledge": has_knowledge,
-                    "has_exam": has_exam,
-                    "review_downloaded": review_downloaded,
-                    "practice_downloaded": practice_downloaded
-                })
+            has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
+            has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
+            review_downloaded = db.query(Order).filter(
+                Order.user_id == user.id,
+                Order.order_type == 'knowledge',
+                Order.title.like(f"%{unit.name}%")
+            ).first() is not None
+            practice_downloaded = db.query(Order).filter(
+                Order.user_id == user.id,
+                Order.order_type == 'practice',
+                Order.title.like(f"%{unit.name}%")
+            ).first() is not None
+            units_list.append({
+                "id": unit.id,
+                "name": unit.name,
+                "unit_number": unit.unit_number,
+                "semester_name": target_semester.name,
+                "has_knowledge": has_knowledge,
+                "has_exam": has_exam,
+                "review_downloaded": review_downloaded,
+                "practice_downloaded": practice_downloaded
+            })
         
-        if len(nearby_units) < 3:
-            for unit in reversed(all_units):
-                if unit.id not in [u['id'] for u in nearby_units]:
-                    has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
-                    has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
-                    review_downloaded = db.query(Order).filter(
-                        Order.user_id == user.id,
-                        Order.order_type == 'knowledge',
-                        Order.title.like(f"%{unit.name}%")
-                    ).first() is not None
-                    practice_downloaded = db.query(Order).filter(
-                        Order.user_id == user.id,
-                        Order.order_type == 'practice',
-                        Order.title.like(f"%{unit.name}%")
-                    ).first() is not None
-                    nearby_units.append({
-                        "id": unit.id,
-                        "name": unit.name,
-                        "unit_number": unit.unit_number,
-                        "semester_name": target_semester.name,
-                        "has_knowledge": has_knowledge,
-                        "has_exam": has_exam,
-                        "review_downloaded": review_downloaded,
-                        "practice_downloaded": practice_downloaded
-                    })
-                    if len(nearby_units) >= 3:
-                        break
-        
-        nearby_units = sorted(nearby_units, key=lambda u: int(u['unit_number']) if isinstance(u['unit_number'], str) else u['unit_number'])
-        
-        if nearby_units:
+        if units_list:
             result.append({
                 "subject_id": subject.id,
                 "subject_name": subject.name,
                 "grade_name": current_grade.name,
                 "semester": current_semester,
-                "units": nearby_units[:3]
+                "units": units_list
             })
     
     return {"subjects": result, "grade_name": current_grade.name, "semester": current_semester}
