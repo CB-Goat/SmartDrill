@@ -21,10 +21,13 @@ class User(Base):
     password = Column(String(255), nullable=False)
     phone = Column(String(20))
     points = Column(Integer, default=0)
+    child_grade_id = Column(Integer, ForeignKey("grades.id"))
+    child_grade_set_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     recharges = relationship("Recharge", back_populates="user")
     orders = relationship("Order", back_populates="user")
+    child_grade = relationship("Grade", foreign_keys=[child_grade_id])
 
 class AdminUser(Base):
     __tablename__ = "admin_users"

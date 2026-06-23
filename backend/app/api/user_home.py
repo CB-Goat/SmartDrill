@@ -14,6 +14,50 @@ from urllib.parse import quote
 
 router = APIRouter(prefix="/user", tags=["用户首页"])
 
+GRADE_ORDER = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '初一', '七年级', '初二', '八年级', '初三', '九年级']
+
+def calculate_current_grade(db, user):
+    if not user.child_grade_id or not user.child_grade_set_at:
+        return None, 0
+    
+    set_grade = db.query(Grade).filter(Grade.id == user.child_grade_id).first()
+    if not set_grade:
+        return None, 0
+    
+    from datetime import datetime
+    months_passed = (datetime.now() - user.child_grade_set_at).days / 30
+    
+    try:
+        set_idx = GRADE_ORDER.index(set_grade.name)
+    except ValueError:
+        return set_grade, months_passed % 12
+    
+    grade_offset = int(months_passed / 12)
+    current_idx = min(set_idx + grade_offset, len(GRADE_ORDER) - 1)
+    
+    current_grade = db.query(Grade).filter(
+        Grade.version_id == set_grade.version_id,
+        Grade.name == GRADE_ORDER[current_idx]
+    ).first()
+    
+    months_in_grade = months_passed % 12 if current_idx < len(GRADE_ORDER) - 1 else 12
+    
+    return (current_grade or set_grade), months_in_grade
+
+def calculate_current_unit_number(months_in_grade):
+    if months_in_grade < 2:
+        return 1
+    elif months_in_grade < 4:
+        return 2
+    elif months_in_grade < 6:
+        return 3
+    elif months_in_grade < 8:
+        return 4
+    elif months_in_grade < 10:
+        return 5
+    else:
+        return 6
+
 def set_run_shading(run, color='D9D9D9'):
     rPr = run._r.get_or_add_rPr()
     shd = OxmlElement('w:shd')
@@ -72,7 +116,13 @@ def get_home_data(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    subjects = db.query(Subject).all()
+    current_grade, months_in_grade = calculate_current_grade(db, user)
+    
+    if not current_grade:
+        return {"subjects": [], "grade_name": None}
+    
+    subjects = db.query(Subject).filter(Subject.grade_id == current_grade.id).all()
+    current_unit_num = calculate_current_unit_number(months_in_grade)
     
     result = []
     for subject in subjects:
@@ -82,7 +132,16 @@ def get_home_data(
         
         all_units = []
         for semester in semesters:
-            units = db.query(Unit).filter(Unit.semester_id == semester.id).order_by(Unit.unit_number.desc()).limit(3).all()
+            units = db.query(Unit).filter(
+                Unit.semester_id == semester.id,
+                Unit.unit_number >= current_unit_num
+            ).order_by(Unit.unit_number).limit(3).all()
+            
+            if not units:
+                units = db.query(Unit).filter(
+                    Unit.semester_id == semester.id
+                ).order_by(Unit.unit_number.desc()).limit(3).all()
+            
             for unit in units:
                 has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                 has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
@@ -102,7 +161,7 @@ def get_home_data(
                 "units": all_units[:3]
             })
     
-    return {"subjects": result}
+    return {"subjects": result, "grade_name": current_grade.name}
 
 @router.get("/unit-word/{unit_id}")
 def get_unit_word(
@@ -258,3 +317,24 @@ def download_unit(
     db.commit()
     
     return {"message": "下载成功", "points": user.points}
+
+@router.post("/set-child-grade")
+def set_child_grade(
+    data: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    grade_id = data.get('grade_id')
+    if not grade_id:
+        raise HTTPException(status_code=400, detail="年级ID不能为空")
+    
+    grade = db.query(Grade).filter(Grade.id == grade_id).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="年级不存在")
+    
+    from datetime import datetime
+    user.child_grade_id = grade_id
+    user.child_grade_set_at = datetime.now()
+    db.commit()
+    
+    return {"message": "设置成功", "grade_name": grade.name}
