@@ -225,7 +225,7 @@ async function previewUnit(unit: any) {
         await renderAsync(blob, previewContainer.value, undefined, {
           className: 'docx-preview-wrapper',
           inWrapper: true,
-          ignoreWidth: false,
+          ignoreWidth: true,
           ignoreHeight: false,
           ignoreFonts: false,
           breakPages: true,
