@@ -156,7 +156,8 @@ def get_home_data(
         
         nearby_units = []
         for unit in all_units:
-            if abs(unit.unit_number - current_unit_num) <= 1:
+            unit_num = int(unit.unit_number) if isinstance(unit.unit_number, str) else unit.unit_number
+            if abs(unit_num - current_unit_num) <= 1:
                 has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                 has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
                 nearby_units.append({
@@ -170,7 +171,8 @@ def get_home_data(
         
         if len(nearby_units) < 3:
             for unit in all_units:
-                if unit.unit_number >= current_unit_num and unit not in [u for u in nearby_units]:
+                unit_num = int(unit.unit_number) if isinstance(unit.unit_number, str) else unit.unit_number
+                if unit_num >= current_unit_num and unit.id not in [u['id'] for u in nearby_units]:
                     has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                     has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
                     nearby_units.append({
