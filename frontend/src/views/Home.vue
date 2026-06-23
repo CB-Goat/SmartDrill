@@ -239,7 +239,19 @@ async function previewUnit(unit: any) {
           renderFootnotes: true,
           renderEndnotes: true
         })
-
+        
+        requestAnimationFrame(() => {
+          const wrapper = previewContainer.value?.querySelector('.docx-preview-wrapper') as HTMLElement
+          if (wrapper && previewContainer.value) {
+            const containerWidth = previewContainer.value.clientWidth - 48
+            const docWidth = 794
+            const scale = Math.min(containerWidth / docWidth, 1)
+            
+            wrapper.style.setProperty('transform', `scale(${scale})`, 'important')
+            wrapper.style.setProperty('transform-origin', 'top center', 'important')
+            wrapper.style.setProperty('width', `${docWidth}px`, 'important')
+          }
+        })
       }
     }, 100)
   } catch (error) {
@@ -620,9 +632,7 @@ async function downloadUnit() {
 .modal-body :deep(.docx-preview-wrapper) {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transform: scale(0.5);
-  transform-origin: top center;
-  width: 794px;
+
   margin: 0 auto;
 }
 
