@@ -16,7 +16,7 @@
         <div class="card-title-vertical">单元复习</div>
         <div class="card-body">
           <div v-for="subject in subjects" :key="subject.subject_id" class="subject-section">
-            <div class="subject-name">{{ subject.subject_name }}<{{ subject.grade_name }}{{ getSemesterLabel(subject.units[0]?.semester_name) }}>：</div>
+            <div class="subject-name">{{ subject.subject_name }}<{{ subject.grade_name }}{{ subject.semester }}>：</div>
             <div class="units-list">
               <span 
                 v-for="unit in subject.units" 
@@ -36,7 +36,7 @@
         <div class="card-title-vertical">训练刷题</div>
         <div class="card-body">
           <div v-for="subject in subjects" :key="subject.subject_id" class="subject-section">
-            <div class="subject-name">{{ subject.subject_name }}<{{ subject.grade_name }}{{ getSemesterLabel(subject.units[0]?.semester_name) }}>：</div>
+            <div class="subject-name">{{ subject.subject_name }}<{{ subject.grade_name }}{{ subject.semester }}>：</div>
             <div class="units-list">
               <span 
                 v-for="unit in subject.units" 
@@ -92,12 +92,6 @@ onMounted(async () => {
   await loadHomeData()
 })
 
-function getSemesterLabel(semesterName: string) {
-  if (!semesterName) return ''
-  if (semesterName.includes('上') || semesterName.includes('一')) return '上册'
-  if (semesterName.includes('下') || semesterName.includes('二')) return '下册'
-  return semesterName
-}
 
 async function loadHomeData() {
   try {
