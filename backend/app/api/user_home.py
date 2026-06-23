@@ -165,13 +165,18 @@ def get_home_data(
             if abs(unit_num - current_unit_num) <= 1:
                 has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                 has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
+                downloaded = db.query(Order).filter(
+                    Order.user_id == user.id,
+                    Order.title.like(f"%{unit.name}%")
+                ).first() is not None
                 nearby_units.append({
                     "id": unit.id,
                     "name": unit.name,
                     "unit_number": unit.unit_number,
                     "semester_name": target_semester.name,
                     "has_knowledge": has_knowledge,
-                    "has_exam": has_exam
+                    "has_exam": has_exam,
+                    "downloaded": downloaded
                 })
         
         if len(nearby_units) < 3:
@@ -179,13 +184,18 @@ def get_home_data(
                 if unit.id not in [u['id'] for u in nearby_units]:
                     has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                     has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
+                    downloaded = db.query(Order).filter(
+                        Order.user_id == user.id,
+                        Order.title.like(f"%{unit.name}%")
+                    ).first() is not None
                     nearby_units.append({
                         "id": unit.id,
                         "name": unit.name,
                         "unit_number": unit.unit_number,
                         "semester_name": target_semester.name,
                         "has_knowledge": has_knowledge,
-                        "has_exam": has_exam
+                        "has_exam": has_exam,
+                        "downloaded": downloaded
                     })
                     if len(nearby_units) >= 3:
                         break

@@ -21,8 +21,8 @@
               <span 
                 v-for="unit in subject.units" 
                 :key="unit.id" 
-                class="unit-link"
-                @click="previewUnit(unit, 'review')"
+                :class="['unit-link', { 'unit-downloaded': unit.downloaded }]"
+                @click="!unit.downloaded && previewUnit(unit, 'review')"
               >
                 {{ unit.name }}
               </span>
@@ -41,8 +41,8 @@
               <span 
                 v-for="unit in subject.units" 
                 :key="unit.id" 
-                class="unit-link"
-                @click="previewUnit(unit, 'practice')"
+                :class="['unit-link', { 'unit-downloaded': unit.downloaded }]"
+                @click="!unit.downloaded && previewUnit(unit, 'practice')"
               >
                 {{ unit.name }}
               </span>
@@ -308,6 +308,16 @@ async function downloadUnit() {
 
 .unit-link:active {
   background: #d6e4fc;
+}
+
+.unit-downloaded {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.unit-downloaded:hover {
+  background: #f5f5f5;
 }
 
 .empty-text {
