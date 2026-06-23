@@ -225,7 +225,7 @@ async function previewUnit(unit: any) {
         await renderAsync(blob, previewContainer.value, undefined, {
           className: 'docx-preview-wrapper',
           inWrapper: true,
-          ignoreWidth: true,
+          ignoreWidth: false,
           ignoreHeight: false,
           ignoreFonts: false,
           breakPages: true,
@@ -238,6 +238,14 @@ async function previewUnit(unit: any) {
           renderFootnotes: true,
           renderEndnotes: true
         })
+        
+        const wrapper = previewContainer.value.querySelector('.docx-preview-wrapper') as HTMLElement
+        if (wrapper) {
+          const containerWidth = previewContainer.value.clientWidth - 48
+          const docWidth = 794
+          const scale = Math.min(containerWidth / docWidth, 1)
+          wrapper.style.transform = `scale(${scale})`
+        }
       }
     }, 100)
   } catch (error) {
@@ -611,12 +619,15 @@ async function downloadUnit() {
   overflow-y: auto;
   flex: 1;
   background: #f0f0f0;
+  display: flex;
+  justify-content: center;
 }
 
 .modal-body :deep(.docx-preview-wrapper) {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  margin: 0 auto;
+  transform-origin: top center;
+  width: 794px;
 }
 
 .modal-body :deep(.docx-wrapper) {
