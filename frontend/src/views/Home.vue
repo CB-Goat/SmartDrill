@@ -21,8 +21,8 @@
               <span 
                 v-for="unit in subject.units" 
                 :key="unit.id" 
-                :class="['unit-link', { 'unit-downloaded': unit.downloaded }]"
-                @click="!unit.downloaded && previewUnit(unit, 'review')"
+                :class="['unit-link', { 'unit-downloaded': unit.review_downloaded }]"
+                @click="!unit.review_downloaded && previewUnit(unit, 'review')"
               >
                 {{ unit.name }}
               </span>
@@ -41,8 +41,8 @@
               <span 
                 v-for="unit in subject.units" 
                 :key="unit.id" 
-                :class="['unit-link', { 'unit-downloaded': unit.downloaded }]"
-                @click="!unit.downloaded && previewUnit(unit, 'practice')"
+                :class="['unit-link', { 'unit-downloaded': unit.practice_downloaded }]"
+                @click="!unit.practice_downloaded && previewUnit(unit, 'practice')"
               >
                 {{ unit.name }}
               </span>

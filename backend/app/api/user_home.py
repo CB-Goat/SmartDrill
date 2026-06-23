@@ -165,8 +165,14 @@ def get_home_data(
             if abs(unit_num - current_unit_num) <= 1:
                 has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                 has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
-                downloaded = db.query(Order).filter(
+                review_downloaded = db.query(Order).filter(
                     Order.user_id == user.id,
+                    Order.order_type == 'knowledge',
+                    Order.title.like(f"%{unit.name}%")
+                ).first() is not None
+                practice_downloaded = db.query(Order).filter(
+                    Order.user_id == user.id,
+                    Order.order_type == 'practice',
                     Order.title.like(f"%{unit.name}%")
                 ).first() is not None
                 nearby_units.append({
@@ -176,7 +182,8 @@ def get_home_data(
                     "semester_name": target_semester.name,
                     "has_knowledge": has_knowledge,
                     "has_exam": has_exam,
-                    "downloaded": downloaded
+                    "review_downloaded": review_downloaded,
+                    "practice_downloaded": practice_downloaded
                 })
         
         if len(nearby_units) < 3:
@@ -184,8 +191,14 @@ def get_home_data(
                 if unit.id not in [u['id'] for u in nearby_units]:
                     has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
                     has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
-                    downloaded = db.query(Order).filter(
+                    review_downloaded = db.query(Order).filter(
                         Order.user_id == user.id,
+                        Order.order_type == 'knowledge',
+                        Order.title.like(f"%{unit.name}%")
+                    ).first() is not None
+                    practice_downloaded = db.query(Order).filter(
+                        Order.user_id == user.id,
+                        Order.order_type == 'practice',
                         Order.title.like(f"%{unit.name}%")
                     ).first() is not None
                     nearby_units.append({
@@ -195,7 +208,8 @@ def get_home_data(
                         "semester_name": target_semester.name,
                         "has_knowledge": has_knowledge,
                         "has_exam": has_exam,
-                        "downloaded": downloaded
+                        "review_downloaded": review_downloaded,
+                        "practice_downloaded": practice_downloaded
                     })
                     if len(nearby_units) >= 3:
                         break
