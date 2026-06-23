@@ -158,6 +158,7 @@ def get_home_data(
             result.append({
                 "subject_id": subject.id,
                 "subject_name": subject.name,
+                "grade_name": current_grade.name,
                 "units": all_units[:3]
             })
     
