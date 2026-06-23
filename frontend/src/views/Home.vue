@@ -13,18 +13,25 @@
     
     <div class="main-content">
       <div class="card">
-        <div class="type-tabs">
-          <div 
-            :class="['type-tab', 'review-tab', { active: activeType === 'review' }]"
-            @click="activeType = 'review'"
-          >
-            单元复习
+        <div class="top-tabs">
+          <div class="grade-semester-tab" @click="showGradeSelector = true">
+            <span>{{ currentGradeName }}{{ currentSemester }}</span>
+            <van-icon name="arrow-down" size="12" style="margin-left: 4px" />
           </div>
-          <div 
-            :class="['type-tab', 'practice-tab', { active: activeType === 'practice' }]"
-            @click="activeType = 'practice'"
-          >
-            训练刷题
+          
+          <div class="type-tabs">
+            <div 
+              :class="['type-tab', 'review-tab', { active: activeType === 'review' }]"
+              @click="activeType = 'review'"
+            >
+              单元复习
+            </div>
+            <div 
+              :class="['type-tab', 'practice-tab', { active: activeType === 'practice' }]"
+              @click="activeType = 'practice'"
+            >
+              训练刷题
+            </div>
           </div>
         </div>
         
@@ -36,7 +43,6 @@
               :class="['subject-tab', { active: activeSubject === index }]"
               @click="activeSubject = index"
             >
-              <div class="grade-semester">{{ subject.grade_name }}{{ subject.semester }}</div>
               <div class="subject-name">{{ subject.subject_name }}</div>
             </div>
           </div>
@@ -57,6 +63,50 @@
         </div>
       </div>
     </div>
+    
+    <van-popup v-model:show="showGradeSelector" position="bottom" round>
+      <div class="grade-selector">
+        <div class="selector-header">
+          <span>选择年级和学期</span>
+          <van-icon name="cross" @click="showGradeSelector = false" />
+        </div>
+        <div class="selector-body">
+          <div class="selector-section">
+            <div class="section-title">年级</div>
+            <div class="grade-list">
+              <div 
+                v-for="grade in allGrades" 
+                :key="grade.id"
+                :class="['grade-item', { active: selectedGradeId === grade.id }]"
+                @click="selectedGradeId = grade.id"
+              >
+                {{ grade.name }}
+              </div>
+            </div>
+          </div>
+          <div class="selector-section">
+            <div class="section-title">学期</div>
+            <div class="semester-list">
+              <div 
+                :class="['semester-item', { active: selectedSemester === '上册' }]"
+                @click="selectedSemester = '上册'"
+              >
+                上册
+              </div>
+              <div 
+                :class="['semester-item', { active: selectedSemester === '下册' }]"
+                @click="selectedSemester = '下册'"
+              >
+                下册
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="selector-footer">
+          <van-button type="primary" block @click="confirmGradeChange">确定</van-button>
+        </div>
+      </div>
+    </van-popup>
     
     <div v-if="previewVisible" class="modal-overlay" @click="previewVisible = false">
       <div class="modal-content" @click.stop>
@@ -90,6 +140,15 @@ const activeType = ref<'review' | 'practice'>('review')
 const activeSubject = ref(0)
 const subjects = ref<any[]>([])
 
+const currentGradeName = ref('')
+const currentSemester = ref('')
+const currentGradeId = ref<number | null>(null)
+const allGrades = ref<any[]>([])
+
+const showGradeSelector = ref(false)
+const selectedGradeId = ref<number | null>(null)
+const selectedSemester = ref('')
+
 const previewVisible = ref(false)
 const previewUnitData = ref<any>(null)
 const previewContainer = ref<HTMLElement | null>(null)
@@ -105,16 +164,40 @@ onMounted(async () => {
   await loadHomeData()
 })
 
-async function loadHomeData() {
+async function loadHomeData(gradeId?: number, semester?: string) {
   try {
-    const response = await fetch('/api/user/home-data', {
+    let url = '/api/user/home-data'
+    const params = new URLSearchParams()
+    if (gradeId) params.append('grade_id', gradeId.toString())
+    if (semester) params.append('semester', semester)
+    if (params.toString()) url += '?' + params.toString()
+    
+    const response = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + userStore.token }
     })
     const result = await response.json()
     subjects.value = result.subjects || []
+    currentGradeName.value = result.grade_name || ''
+    currentSemester.value = result.semester || ''
+    currentGradeId.value = result.current_grade_id
+    allGrades.value = result.all_grades || []
+    
+    selectedGradeId.value = result.current_grade_id
+    selectedSemester.value = result.semester || ''
   } catch (error) {
     console.error('加载数据失败')
   }
+}
+
+async function confirmGradeChange() {
+  if (!selectedGradeId.value) {
+    showToast('请选择年级')
+    return
+  }
+  
+  showGradeSelector.value = false
+  activeSubject.value = 0
+  await loadHomeData(selectedGradeId.value, selectedSemester.value)
 }
 
 async function previewUnit(unit: any) {
@@ -258,6 +341,24 @@ async function downloadUnit() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.top-tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.grade-semester-tab {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 12px 0;
+  text-align: center;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .type-tabs {
   display: flex;
   width: 100%;
@@ -265,9 +366,9 @@ async function downloadUnit() {
 
 .type-tab {
   flex: 1;
-  padding: 14px 0;
+  padding: 12px 0;
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s;
@@ -296,14 +397,14 @@ async function downloadUnit() {
 }
 
 .subject-tabs {
-  width: 100px;
+  width: 80px;
   background: #f8f8f8;
   border-right: 1px solid #eee;
   overflow-y: auto;
 }
 
 .subject-tab {
-  padding: 12px 8px;
+  padding: 14px 8px;
   text-align: center;
   cursor: pointer;
   border-bottom: 1px solid #eee;
@@ -313,12 +414,6 @@ async function downloadUnit() {
 .subject-tab.active {
   background: #fff;
   border-left: 3px solid #ff6b6b;
-}
-
-.subject-tab .grade-semester {
-  font-size: 12px;
-  color: #999;
-  margin-bottom: 4px;
 }
 
 .subject-tab .subject-name {
@@ -381,6 +476,82 @@ async function downloadUnit() {
   font-size: 14px;
   text-align: center;
   padding: 40px 20px;
+}
+
+.grade-selector {
+  padding: 20px;
+}
+
+.selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.selector-body {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.selector-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.grade-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.grade-item {
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.grade-item.active {
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.semester-list {
+  display: flex;
+  gap: 10px;
+}
+
+.semester-item {
+  flex: 1;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.semester-item.active {
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.selector-footer {
+  margin-top: 20px;
 }
 
 .modal-overlay {

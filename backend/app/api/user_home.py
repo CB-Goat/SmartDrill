@@ -117,6 +117,8 @@ def format_content(doc, content):
 
 @router.get("/home-data")
 def get_home_data(
+    grade_id: int = None,
+    semester: str = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -125,11 +127,20 @@ def get_home_data(
     current_grade, months_in_grade, current_semester = calculate_current_grade(db, user)
     
     if not current_grade:
-        return {"subjects": [], "grade_name": None, "semester": None}
+        return {"subjects": [], "grade_name": None, "semester": None, "all_grades": [], "current_grade_id": None}
+    
+    if grade_id:
+        selected_grade = db.query(Grade).filter(Grade.id == grade_id).first()
+        if selected_grade:
+            current_grade = selected_grade
+        if semester:
+            current_semester = semester
     
     subjects = db.query(Subject).filter(Subject.grade_id == current_grade.id).all()
-    current_month = datetime.now().month
-    current_unit_num = calculate_current_unit_number(current_month, current_semester)
+    
+    all_grades = db.query(Grade).filter(Grade.version_id == current_grade.version_id).all()
+    grade_order_map = {name: idx for idx, name in enumerate(GRADE_ORDER)}
+    all_grades = sorted(all_grades, key=lambda g: grade_order_map.get(g.name, 999))
     
     result = []
     for subject in subjects:
@@ -193,7 +204,13 @@ def get_home_data(
                 "units": units_list
             })
     
-    return {"subjects": result, "grade_name": current_grade.name, "semester": current_semester}
+    return {
+        "subjects": result, 
+        "grade_name": current_grade.name, 
+        "semester": current_semester,
+        "all_grades": [{"id": g.id, "name": g.name} for g in all_grades],
+        "current_grade_id": current_grade.id
+    }
 
 @router.get("/unit-word/{unit_id}")
 def get_unit_word(
