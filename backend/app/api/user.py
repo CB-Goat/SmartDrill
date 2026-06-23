@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import User, Recharge, Order
 from app.schemas.schemas import RechargeRequest, OrderResponse
-from app.utils.auth import get_current_user, hash_password, verify_password
+from app.utils.auth import get_current_user, get_password_hash, verify_password
 from typing import List
 
 router = APIRouter(prefix="/user", tags=["用户"])
@@ -57,6 +57,6 @@ def update_password(data: dict, current_user: User = Depends(get_current_user), 
     if not verify_password(old_password, current_user.password):
         raise HTTPException(status_code=400, detail="旧密码错误")
     
-    current_user.password = hash_password(new_password)
+    current_user.password = get_password_hash(new_password)
     db.commit()
     return {"message": "修改成功"}
