@@ -85,10 +85,10 @@ export const api = {
     request.post('/materials/practice', data),
   
   getOrders: () =>
-    request.get('/orders'),
+    request.get('/user/orders'),
   
   downloadOrder: (orderId: number) =>
-    request.get(`/orders/${orderId}/download`, { responseType: 'blob' }),
+    request.get(`/user/orders/${orderId}/download`, { responseType: 'blob' }),
   
   admin: {
     getUsers: () => adminRequest.get('/admin/users'),

@@ -14,6 +14,12 @@
         </van-cell-group>
       </van-list>
     </van-pull-refresh>
+    
+    <van-tabbar v-model="active" active-color="#ff6b6b" inactive-color="#999">
+      <van-tabbar-item icon="home-o" to="/">首页</van-tabbar-item>
+      <van-tabbar-item icon="description" to="/orders">订单</van-tabbar-item>
+      <van-tabbar-item icon="user-o" to="/profile">我的</van-tabbar-item>
+    </van-tabbar>
   </div>
 </template>
 
@@ -21,6 +27,7 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/api'
 
+const active = ref(1)
 const orders = ref<any[]>([])
 const loading = ref(false)
 const finished = ref(false)
