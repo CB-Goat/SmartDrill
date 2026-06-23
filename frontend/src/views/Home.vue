@@ -239,20 +239,7 @@ async function previewUnit(unit: any) {
           renderFootnotes: true,
           renderEndnotes: true
         })
-        
-        const wrapper = previewContainer.value.querySelector('.docx-preview-wrapper') as HTMLElement
-        if (wrapper) {
-          const containerWidth = previewContainer.value.clientWidth - 48
-          const docWidth = 794
-          const scale = Math.min(containerWidth / docWidth, 1)
-          
-          wrapper.style.transform = `scale(${scale})`
-          wrapper.style.transformOrigin = 'top center'
-          wrapper.style.width = docWidth + 'px'
-          
-          const actualHeight = wrapper.scrollHeight * scale
-          wrapper.style.marginBottom = `-${wrapper.scrollHeight - actualHeight}px`
-        }
+
       }
     }, 100)
   } catch (error) {
@@ -633,7 +620,10 @@ async function downloadUnit() {
 .modal-body :deep(.docx-preview-wrapper) {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-
+  transform: scale(0.5);
+  transform-origin: top center;
+  width: 794px;
+  margin: 0 auto;
 }
 
 .modal-body :deep(.docx-wrapper) {
