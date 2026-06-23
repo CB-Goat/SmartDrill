@@ -110,14 +110,11 @@
     
     <div v-if="previewVisible" class="modal-overlay" @click="previewVisible = false">
       <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ previewUnitData?.unit_name }}</h3>
-          <div>
-            <button class="btn-primary" @click="downloadUnit" style="margin-right: 8px">下载（10积分）</button>
-            <button class="close-btn" @click="previewVisible = false">×</button>
-          </div>
-        </div>
         <div class="modal-body" ref="previewContainer"></div>
+        <div class="modal-footer">
+          <button class="btn-close" @click="previewVisible = false">关闭（×）</button>
+          <button class="btn-primary" @click="downloadUnit">下载Word（10积分）</button>
+        </div>
       </div>
     </div>
     
@@ -579,34 +576,6 @@ async function downloadUnit() {
   flex-direction: column;
 }
 
-.modal-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
 .modal-body {
   padding: 24px;
   overflow-y: auto;
@@ -632,14 +601,38 @@ async function downloadUnit() {
   margin-bottom: 20px;
 }
 
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.btn-close {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.btn-close:hover {
+  background: #e8e8e8;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
   color: #fff;
   border: none;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
+  flex: 1;
 }
 
 .btn-primary:hover {
