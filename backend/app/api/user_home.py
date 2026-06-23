@@ -122,13 +122,16 @@ def get_home_data(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    from datetime import datetime
+    
     current_grade, months_in_grade, current_semester = calculate_current_grade(db, user)
     
     if not current_grade:
         return {"subjects": [], "grade_name": None, "semester": None}
     
     subjects = db.query(Subject).filter(Subject.grade_id == current_grade.id).all()
-    current_unit_num = calculate_current_unit_number(months_in_grade)
+    current_month = datetime.now().month
+    current_unit_num = calculate_current_unit_number(current_month, current_semester)
     
     result = []
     for subject in subjects:
@@ -146,36 +149,50 @@ def get_home_data(
         if not target_semester:
             target_semester = semesters[0]
         
-        units = db.query(Unit).filter(
-            Unit.semester_id == target_semester.id,
-            Unit.unit_number >= current_unit_num
-        ).order_by(Unit.unit_number).limit(3).all()
+        all_units = db.query(Unit).filter(
+            Unit.semester_id == target_semester.id
+        ).order_by(Unit.unit_number).all()
         
-        if not units:
-            units = db.query(Unit).filter(
-                Unit.semester_id == target_semester.id
-            ).order_by(Unit.unit_number.desc()).limit(3).all()
+        if not all_units:
+            continue
         
-        all_units = []
-        for unit in units:
-            has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
-            has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
-            all_units.append({
-                "id": unit.id,
-                "name": unit.name,
-                "unit_number": unit.unit_number,
-                "semester_name": target_semester.name,
-                "has_knowledge": has_knowledge,
-                "has_exam": has_exam
-            })
+        nearby_units = []
+        for unit in all_units:
+            if abs(unit.unit_number - current_unit_num) <= 1:
+                has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
+                has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
+                nearby_units.append({
+                    "id": unit.id,
+                    "name": unit.name,
+                    "unit_number": unit.unit_number,
+                    "semester_name": target_semester.name,
+                    "has_knowledge": has_knowledge,
+                    "has_exam": has_exam
+                })
         
-        if all_units:
+        if len(nearby_units) < 3:
+            for unit in all_units:
+                if unit.unit_number >= current_unit_num and unit not in [u for u in nearby_units]:
+                    has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
+                    has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
+                    nearby_units.append({
+                        "id": unit.id,
+                        "name": unit.name,
+                        "unit_number": unit.unit_number,
+                        "semester_name": target_semester.name,
+                        "has_knowledge": has_knowledge,
+                        "has_exam": has_exam
+                    })
+                    if len(nearby_units) >= 3:
+                        break
+        
+        if nearby_units:
             result.append({
                 "subject_id": subject.id,
                 "subject_name": subject.name,
                 "grade_name": current_grade.name,
                 "semester": current_semester,
-                "units": all_units[:3]
+                "units": nearby_units[:3]
             })
     
     return {"subjects": result, "grade_name": current_grade.name, "semester": current_semester}
