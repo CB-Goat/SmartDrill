@@ -68,9 +68,8 @@
     
     <van-tabbar v-model="active" active-color="#ff6b6b" inactive-color="#999">
       <van-tabbar-item icon="home-o" to="/">首页</van-tabbar-item>
-      <van-tabbar-item icon="description" to="/review">复习</van-tabbar-item>
-      <van-tabbar-item icon="edit" to="/practice">练习</van-tabbar-item>
-      <van-tabbar-item icon="user-o" to="/orders">我的</van-tabbar-item>
+      <van-tabbar-item icon="description" to="/orders">订单</van-tabbar-item>
+      <van-tabbar-item icon="user-o" to="/profile">我的</van-tabbar-item>
     </van-tabbar>
   </div>
 </template>
@@ -238,6 +237,7 @@ async function downloadUnit() {
 .main-content {
   padding: 20px;
   display: flex;
+  flex-direction: column;
   gap: 20px;
 }
 
