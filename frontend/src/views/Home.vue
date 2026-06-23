@@ -222,6 +222,9 @@ async function previewUnit(unit: any) {
       if (previewContainer.value) {
         const { renderAsync } = await import('docx-preview')
         previewContainer.value.innerHTML = ''
+        
+        const containerWidth = previewContainer.value.clientWidth - 48
+        
         await renderAsync(blob, previewContainer.value, undefined, {
           className: 'docx-preview-wrapper',
           inWrapper: true,
@@ -241,10 +244,7 @@ async function previewUnit(unit: any) {
         
         const wrapper = previewContainer.value.querySelector('.docx-preview-wrapper') as HTMLElement
         if (wrapper) {
-          const containerWidth = previewContainer.value.clientWidth - 48
-          const docWidth = 794
-          const scale = Math.min(containerWidth / docWidth, 1)
-          wrapper.style.transform = `scale(${scale})`
+          wrapper.style.width = containerWidth + 'px'
         }
       }
     }, 100)
@@ -626,8 +626,7 @@ async function downloadUnit() {
 .modal-body :deep(.docx-preview-wrapper) {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transform-origin: top center;
-  width: 794px;
+
 }
 
 .modal-body :deep(.docx-wrapper) {
