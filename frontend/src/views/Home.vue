@@ -223,8 +223,6 @@ async function previewUnit(unit: any) {
         const { renderAsync } = await import('docx-preview')
         previewContainer.value.innerHTML = ''
         
-        const containerWidth = previewContainer.value.clientWidth - 48
-        
         await renderAsync(blob, previewContainer.value, undefined, {
           className: 'docx-preview-wrapper',
           inWrapper: true,
@@ -244,7 +242,16 @@ async function previewUnit(unit: any) {
         
         const wrapper = previewContainer.value.querySelector('.docx-preview-wrapper') as HTMLElement
         if (wrapper) {
-          wrapper.style.width = containerWidth + 'px'
+          const containerWidth = previewContainer.value.clientWidth - 48
+          const docWidth = 794
+          const scale = Math.min(containerWidth / docWidth, 1)
+          
+          wrapper.style.transform = `scale(${scale})`
+          wrapper.style.transformOrigin = 'top center'
+          wrapper.style.width = docWidth + 'px'
+          
+          const actualHeight = wrapper.scrollHeight * scale
+          wrapper.style.marginBottom = `-${wrapper.scrollHeight - actualHeight}px`
         }
       }
     }, 100)
