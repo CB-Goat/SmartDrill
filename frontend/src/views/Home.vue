@@ -13,10 +13,20 @@
     
     <div class="main-content">
       <div class="card">
-        <van-tabs v-model:active="activeType" shrink>
-          <van-tab title="单元复习" name="review"></van-tab>
-          <van-tab title="训练刷题" name="practice"></van-tab>
-        </van-tabs>
+        <div class="type-tabs">
+          <div 
+            :class="['type-tab', 'review-tab', { active: activeType === 'review' }]"
+            @click="activeType = 'review'"
+          >
+            单元复习
+          </div>
+          <div 
+            :class="['type-tab', 'practice-tab', { active: activeType === 'practice' }]"
+            @click="activeType = 'practice'"
+          >
+            训练刷题
+          </div>
+        </div>
         
         <div class="card-body">
           <div class="subject-tabs">
@@ -248,17 +258,36 @@ async function downloadUnit() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.card :deep(.van-tabs__nav) {
-  background: #f8f8f8;
+.type-tabs {
+  display: flex;
+  width: 100%;
 }
 
-.card :deep(.van-tab--active) {
-  color: #ff6b6b;
+.type-tab {
+  flex: 1;
+  padding: 14px 0;
+  text-align: center;
+  font-size: 16px;
   font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: #fff;
 }
 
-.card :deep(.van-tabs__line) {
-  background: #ff6b6b;
+.review-tab {
+  background: linear-gradient(135deg, #d3d3d3 0%, #a8a8a8 100%);
+}
+
+.practice-tab {
+  background: linear-gradient(135deg, #d3d3d3 0%, #a8a8a8 100%);
+}
+
+.review-tab.active {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
+}
+
+.practice-tab.active {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 }
 
 .card-body {
