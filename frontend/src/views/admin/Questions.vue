@@ -324,7 +324,15 @@ async function onLoad() {
     ])
     versions.value = vers || []
     questionTypes.value = qts || []
-    difficulties.value = diffs || []
+    // 只保留中文名称的难度，并按名称去重（保留首次出现）
+    const isChinese = (s: string) => /[一-龥]/.test(s)
+    const seen = new Set<string>()
+    difficulties.value = (diffs || []).filter((d: any) => {
+      if (!d || !d.name || !isChinese(d.name)) return false
+      if (seen.has(d.name)) return false
+      seen.add(d.name)
+      return true
+    })
   } catch (e) {
     console.error('加载基础数据失败:', e)
     versions.value = []
