@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
     User, Version, Grade, Subject, Semester, Unit,
-    KnowledgePoint, ExamPoint
+    KnowledgePoint, ExamPoint, Question, QuestionType, Difficulty
 )
 from app.utils.auth import get_current_admin
 from openpyxl import load_workbook
@@ -1012,3 +1012,139 @@ def get_unit_word(
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f"attachment; filename=\"{encoded_filename}\""}
     )
+
+@router.post("/import-questions")
+async def import_questions(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin = Depends(get_current_admin)
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="只支持Excel文件")
+    
+    wb = load_workbook(BytesIO(await file.read()))
+    ws = wb.active
+    
+    question_types_cache = {}
+    difficulties_cache = {}
+    
+    imported = 0
+    skipped = 0
+    errors = []
+    
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row[0]:
+            continue
+        
+        try:
+            subject_name = row[0]
+            grade_name = row[1]
+            semester_name = row[2]
+            unit_number = row[3]
+            unit_name = row[5]
+            exam_point_title = row[6]
+            question_type_name = row[9]
+            difficulty_name = row[10]
+            stem_text = row[11]
+            answer_text = row[12]
+            analysis_text = row[13]
+            json_content = row[14]
+            
+            grade = db.query(Grade).filter(Grade.name == grade_name).first()
+            if not grade:
+                skipped += 1
+                continue
+            
+            subject = db.query(Subject).filter(
+                Subject.grade_id == grade.id,
+                Subject.name == subject_name
+            ).first()
+            if not subject:
+                skipped += 1
+                continue
+            
+            semester = db.query(Semester).filter(
+                Semester.subject_id == subject.id,
+                Semester.name.like(f"%{semester_name}%")
+            ).first()
+            if not semester:
+                skipped += 1
+                continue
+            
+            unit = db.query(Unit).filter(
+                Unit.semester_id == semester.id,
+                Unit.unit_number == int(unit_number) if unit_number else None
+            ).first()
+            if not unit:
+                unit = db.query(Unit).filter(
+                    Unit.semester_id == semester.id,
+                    Unit.name == unit_name
+                ).first()
+            if not unit:
+                skipped += 1
+                continue
+            
+            exam_point = None
+            if exam_point_title:
+                exam_point = db.query(ExamPoint).filter(
+                    ExamPoint.unit_id == unit.id,
+                    ExamPoint.title == exam_point_title
+                ).first()
+            
+            if question_type_name not in question_types_cache:
+                qt = db.query(QuestionType).filter(QuestionType.name == question_type_name).first()
+                if not qt:
+                    qt = QuestionType(name=question_type_name)
+                    db.add(qt)
+                    db.commit()
+                question_types_cache[question_type_name] = qt.id
+            question_type_id = question_types_cache[question_type_name]
+            
+            if difficulty_name not in difficulties_cache:
+                diff = db.query(Difficulty).filter(Difficulty.name == difficulty_name).first()
+                if not diff:
+                    diff = Difficulty(name=difficulty_name)
+                    db.add(diff)
+                    db.commit()
+                difficulties_cache[difficulty_name] = diff.id
+            difficulty_id = difficulties_cache[difficulty_name]
+            
+            import json
+            question_json = None
+            if json_content:
+                try:
+                    question_json = json.loads(json_content) if isinstance(json_content, str) else json_content
+                except:
+                    pass
+            
+            question = Question(
+                version_id=grade.version_id,
+                grade_id=grade.id,
+                subject_id=subject.id,
+                semester_id=semester.id,
+                unit_id=unit.id,
+                exam_point_id=exam_point.id if exam_point else None,
+                question_type_id=question_type_id,
+                difficulty_id=difficulty_id,
+                content=stem_text or "",
+                answer=answer_text or "",
+                analysis=analysis_text or "",
+                question_json=question_json,
+                question_type=question_type_name,
+                stem=stem_text
+            )
+            db.add(question)
+            imported += 1
+            
+        except Exception as e:
+            errors.append(f"第{row_idx}行: {str(e)}")
+            skipped += 1
+    
+    db.commit()
+    
+    return {
+        "message": "题库导入完成",
+        "imported": imported,
+        "skipped": skipped,
+        "errors": errors[:10]
+    }

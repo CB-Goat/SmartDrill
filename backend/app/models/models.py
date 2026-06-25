@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
@@ -162,6 +162,10 @@ class Question(Base):
     options = Column(Text)
     answer = Column(Text, nullable=False)
     analysis = Column(Text)
+    
+    question_json = Column(JSON)
+    question_type = Column(String(50))
+    stem = Column(Text)
     
     question_type_obj = relationship("QuestionType", back_populates="questions")
     difficulty_obj = relationship("Difficulty", back_populates="questions")
