@@ -200,31 +200,89 @@ def get_difficulties(admin: User = Depends(get_current_admin), db: Session = Dep
 
 @router.get("/questions")
 def get_questions(
+    version_id: int = None,
+    grade_id: int = None,
+    subject_id: int = None,
+    semester_id: int = None,
     unit_id: int = None,
+    question_type_id: int = None,
+    difficulty_id: int = None,
     page: int = 1,
     page_size: int = 50,
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     query = db.query(Question)
+    if version_id:
+        query = query.filter(Question.version_id == version_id)
+    if grade_id:
+        query = query.filter(Question.grade_id == grade_id)
+    if subject_id:
+        query = query.filter(Question.subject_id == subject_id)
+    if semester_id:
+        query = query.filter(Question.semester_id == semester_id)
     if unit_id:
         query = query.filter(Question.unit_id == unit_id)
+    if question_type_id:
+        query = query.filter(Question.question_type_id == question_type_id)
+    if difficulty_id:
+        query = query.filter(Question.difficulty_id == difficulty_id)
 
     total = query.count()
     questions = query.order_by(Question.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
     result = []
     for q in questions:
+        grade_name = None
+        subject_name = None
+        semester_name = None
+        unit_name = None
+
+        if q.unit_id:
+            unit = db.query(Unit).filter(Unit.id == q.unit_id).first()
+            if unit:
+                unit_name = unit.name
+                semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
+                if semester:
+                    semester_name = semester.name
+                    subject = db.query(Subject).filter(Subject.id == semester.subject_id).first()
+                    if subject:
+                        subject_name = subject.name
+                        grade = db.query(Grade).filter(Grade.id == subject.grade_id).first()
+                        if grade:
+                            grade_name = grade.name
+
+        diff_name = None
+        if q.difficulty_obj and q.difficulty_obj.name:
+            diff_raw = q.difficulty_obj.name.lower()
+            if diff_raw in ['easy', 'simple', '简单']:
+                diff_name = '简单'
+            elif diff_raw in ['normal', 'medium', '普通', '中等']:
+                diff_name = '普通'
+            elif diff_raw in ['hard', 'difficult', '困难']:
+                diff_name = '困难'
+            else:
+                diff_name = q.difficulty_obj.name
+
         result.append({
             "id": q.id,
             "content": q.content,
+            "stem": q.stem,
+            "question_json": q.question_json,
             "answer": q.answer,
             "analysis": q.analysis,
             "question_type": q.question_type_obj.name if q.question_type_obj else None,
-            "difficulty": q.difficulty_obj.name if q.difficulty_obj else None,
+            "difficulty": diff_name,
+            "grade_name": grade_name,
+            "subject_name": subject_name,
+            "semester_name": semester_name,
+            "unit_name": unit_name,
             "exam_point_title": q.exam_point.title if q.exam_point else None,
             "question_type_id": q.question_type_id,
             "difficulty_id": q.difficulty_id,
+            "grade_id": q.grade_id,
+            "subject_id": q.subject_id,
+            "semester_id": q.semester_id,
             "unit_id": q.unit_id,
             "knowledge_point_id": q.knowledge_point_id,
             "exam_point_id": q.exam_point_id

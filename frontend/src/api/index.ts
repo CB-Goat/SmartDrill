@@ -122,8 +122,7 @@ export const api = {
     
     getQuestionTypes: () => adminRequest.get('/admin/question-types'),
     getDifficulties: () => adminRequest.get('/admin/difficulties'),
-    getQuestions: (page?: number, pageSize?: number) =>
-      adminRequest.get('/admin/questions', { params: { page, page_size: pageSize } }),
+    getQuestions: (params?: any) => adminRequest.get('/admin/questions', { params }),
     saveQuestion: (data: any) => adminRequest.post('/admin/questions', data)
   }
 }
