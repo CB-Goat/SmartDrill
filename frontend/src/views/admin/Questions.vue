@@ -125,8 +125,12 @@ async function handleImport(event: Event) {
     const formData = new FormData()
     formData.append('file', file)
     
+    const adminToken = localStorage.getItem('admin_token')
     const response = await fetch('/api/admin/import-questions', {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${adminToken}`
+      },
       body: formData
     })
     
