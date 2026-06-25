@@ -13,7 +13,7 @@ router = APIRouter(prefix="/admin", tags=["管理"])
 @router.get("/users")
 def get_users(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     users = db.query(User).all()
-    return [{"id": u.id, "username": u.username, "phone": u.phone, "points": u.points, "role": u.role.value} for u in users]
+    return [{"id": u.id, "username": u.username, "phone": u.phone, "points": u.points, "role": "user"} for u in users]
 
 @router.get("/recharges")
 def get_recharges(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
