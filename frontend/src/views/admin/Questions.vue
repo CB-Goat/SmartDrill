@@ -315,7 +315,7 @@ const filteredUnits = computed(() => {
 })
 
 async function onLoad() {
-  const [vers, gras, subs, sems, uns, qts, diffs] = await Promise.all([
+  const results = await Promise.allSettled([
     api.admin.getVersions(),
     api.admin.getGrades(),
     api.admin.getSubjects(),
@@ -324,13 +324,16 @@ async function onLoad() {
     api.admin.getQuestionTypes(),
     api.admin.getDifficulties()
   ])
-  versions.value = vers
-  grades.value = gras
-  subjects.value = subs
-  semesters.value = sems
-  units.value = uns
-  questionTypes.value = qts
-  difficulties.value = diffs
+
+  const extract = (result: any) => result.status === 'fulfilled' ? result.value : []
+
+  versions.value = extract(results[0])
+  grades.value = extract(results[1])
+  subjects.value = extract(results[2])
+  semesters.value = extract(results[3])
+  units.value = extract(results[4])
+  questionTypes.value = extract(results[5])
+  difficulties.value = extract(results[6])
 
   if (versions.value.length > 0 && !filterVersionId.value) {
     filterVersionId.value = versions.value[0].id
