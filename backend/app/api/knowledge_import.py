@@ -1031,9 +1031,20 @@ async def import_questions(
     imported = 0
     skipped = 0
     errors = []
+    skip_reasons = {
+        "年级不存在": 0,
+        "科目不存在": 0,
+        "学期不存在": 0,
+        "单元不存在": 0,
+        "首列为空": 0,
+        "其他错误": 0
+    }
+    skip_details = []
     
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if not row[0]:
+            skip_reasons["首列为空"] += 1
+            skipped += 1
             continue
         
         try:
@@ -1052,7 +1063,9 @@ async def import_questions(
             
             grade = db.query(Grade).filter(Grade.name == grade_name).first()
             if not grade:
+                skip_reasons["年级不存在"] += 1
                 skipped += 1
+                skip_details.append(f"第{row_idx}行: 年级'{grade_name}'不存在")
                 continue
             
             subject = db.query(Subject).filter(
@@ -1060,7 +1073,9 @@ async def import_questions(
                 Subject.name == subject_name
             ).first()
             if not subject:
+                skip_reasons["科目不存在"] += 1
                 skipped += 1
+                skip_details.append(f"第{row_idx}行: 科目'{subject_name}'不存在")
                 continue
             
             semester = db.query(Semester).filter(
@@ -1068,7 +1083,9 @@ async def import_questions(
                 Semester.name.like(f"%{semester_name}%")
             ).first()
             if not semester:
+                skip_reasons["学期不存在"] += 1
                 skipped += 1
+                skip_details.append(f"第{row_idx}行: 学期'{semester_name}'不存在")
                 continue
             
             unit = db.query(Unit).filter(
@@ -1081,7 +1098,9 @@ async def import_questions(
                     Unit.name == unit_name
                 ).first()
             if not unit:
+                skip_reasons["单元不存在"] += 1
                 skipped += 1
+                skip_details.append(f"第{row_idx}行: 单元'{unit_name}'(序号{unit_number})不存在")
                 continue
             
             exam_point = None
@@ -1137,6 +1156,7 @@ async def import_questions(
             imported += 1
             
         except Exception as e:
+            skip_reasons["其他错误"] += 1
             errors.append(f"第{row_idx}行: {str(e)}")
             skipped += 1
     
@@ -1146,5 +1166,7 @@ async def import_questions(
         "message": "题库导入完成",
         "imported": imported,
         "skipped": skipped,
+        "skip_reasons": skip_reasons,
+        "skip_details": skip_details[:20],
         "errors": errors[:10]
     }

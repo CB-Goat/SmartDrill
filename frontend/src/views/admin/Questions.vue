@@ -17,17 +17,17 @@
           <th>题目</th>
           <th>题型</th>
           <th>难度</th>
-          <th>考试类型</th>
+          <th>考点</th>
           <th>操作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="q in questions" :key="q.id">
           <td>{{ q.id }}</td>
-          <td>{{ q.question?.substring(0, 30) }}...</td>
+          <td>{{ q.content?.substring(0, 30) }}...</td>
           <td>{{ q.question_type }}</td>
           <td>{{ q.difficulty }}</td>
-          <td>{{ q.exam_type }}</td>
+          <td>{{ q.exam_point_title || '-' }}</td>
           <td>
             <button class="btn-link" @click="editItem(q)">编辑</button>
           </td>
@@ -137,7 +137,20 @@ async function handleImport(event: Event) {
     const result = await response.json()
     
     if (response.ok) {
-      alert(`导入完成！\n成功: ${result.imported}\n跳过: ${result.skipped}`)
+      let msg = `导入完成！\n成功: ${result.imported}\n跳过: ${result.skipped}`
+      if (result.skip_reasons) {
+        msg += '\n\n跳过原因统计:'
+        for (const [reason, count] of Object.entries(result.skip_reasons)) {
+          if (count && (count as number) > 0) {
+            msg += `\n  ${reason}: ${count}`
+          }
+        }
+      }
+      if (result.skip_details && result.skip_details.length > 0) {
+        msg += `\n\n部分跳过详情(前${result.skip_details.length}条):\n`
+        msg += result.skip_details.slice(0, 10).join('\n')
+      }
+      alert(msg)
       onLoad()
     } else {
       alert('导入失败: ' + (result.detail || '未知错误'))
