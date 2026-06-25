@@ -315,28 +315,24 @@ const filteredUnits = computed(() => {
 })
 
 async function onLoad() {
-  const results = await Promise.allSettled([
+  const baseResults = await Promise.allSettled([
     api.admin.getVersions(),
-    api.admin.getGrades(),
-    api.admin.getSubjects(),
-    api.admin.getSemesters(),
-    api.admin.getUnits(),
     api.admin.getQuestionTypes(),
     api.admin.getDifficulties()
   ])
 
   const extract = (result: any) => result.status === 'fulfilled' ? result.value : []
 
-  versions.value = extract(results[0])
-  grades.value = extract(results[1])
-  subjects.value = extract(results[2])
-  semesters.value = extract(results[3])
-  units.value = extract(results[4])
-  questionTypes.value = extract(results[5])
-  difficulties.value = extract(results[6])
+  versions.value = extract(baseResults[0])
+  questionTypes.value = extract(baseResults[1])
+  difficulties.value = extract(baseResults[2])
 
   if (versions.value.length > 0 && !filterVersionId.value) {
     filterVersionId.value = versions.value[0].id
+  }
+
+  if (filterVersionId.value) {
+    api.admin.getGrades(filterVersionId.value).then(data => { grades.value = data }).catch(() => {})
   }
 
   queryData()

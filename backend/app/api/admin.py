@@ -212,7 +212,23 @@ def get_questions(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Question)
+    query = db.query(
+        Question,
+        Grade.name.label('grade_name'),
+        Subject.name.label('subject_name'),
+        Semester.name.label('semester_name'),
+        Unit.name.label('unit_name'),
+        QuestionType.name.label('question_type_name'),
+        Difficulty.name.label('difficulty_name'),
+        ExamPoint.title.label('exam_point_title')
+    ).outerjoin(Grade, Question.grade_id == Grade.id
+    ).outerjoin(Subject, Question.subject_id == Subject.id
+    ).outerjoin(Semester, Question.semester_id == Semester.id
+    ).outerjoin(Unit, Question.unit_id == Unit.id
+    ).outerjoin(QuestionType, Question.question_type_id == QuestionType.id
+    ).outerjoin(Difficulty, Question.difficulty_id == Difficulty.id
+    ).outerjoin(ExamPoint, Question.exam_point_id == ExamPoint.id)
+
     if version_id:
         query = query.filter(Question.version_id == version_id)
     if grade_id:
@@ -229,40 +245,22 @@ def get_questions(
         query = query.filter(Question.difficulty_id == difficulty_id)
 
     total = query.count()
-    questions = query.order_by(Question.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    rows = query.order_by(Question.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
     result = []
-    for q in questions:
-        grade_name = None
-        subject_name = None
-        semester_name = None
-        unit_name = None
-
-        if q.unit_id:
-            unit = db.query(Unit).filter(Unit.id == q.unit_id).first()
-            if unit:
-                unit_name = unit.name
-                semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
-                if semester:
-                    semester_name = semester.name
-                    subject = db.query(Subject).filter(Subject.id == semester.subject_id).first()
-                    if subject:
-                        subject_name = subject.name
-                        grade = db.query(Grade).filter(Grade.id == subject.grade_id).first()
-                        if grade:
-                            grade_name = grade.name
-
-        diff_name = None
-        if q.difficulty_obj and q.difficulty_obj.name:
-            diff_raw = q.difficulty_obj.name.lower()
+    for q, grade_name, subject_name, semester_name, unit_name, qt_name, diff_name, ep_title in rows:
+        if diff_name:
+            diff_raw = diff_name.lower()
             if diff_raw in ['easy', 'simple', '简单']:
-                diff_name = '简单'
+                diff_name_cn = '简单'
             elif diff_raw in ['normal', 'medium', '普通', '中等']:
-                diff_name = '普通'
+                diff_name_cn = '普通'
             elif diff_raw in ['hard', 'difficult', '困难']:
-                diff_name = '困难'
+                diff_name_cn = '困难'
             else:
-                diff_name = q.difficulty_obj.name
+                diff_name_cn = diff_name
+        else:
+            diff_name_cn = None
 
         result.append({
             "id": q.id,
@@ -271,21 +269,21 @@ def get_questions(
             "question_json": q.question_json,
             "answer": q.answer,
             "analysis": q.analysis,
-            "question_type": q.question_type_obj.name if q.question_type_obj else None,
-            "difficulty": diff_name,
+            "question_type": qt_name,
+            "difficulty": diff_name_cn,
             "grade_name": grade_name,
             "subject_name": subject_name,
             "semester_name": semester_name,
             "unit_name": unit_name,
-            "exam_point_title": q.exam_point.title if q.exam_point else None,
+            "exam_point_title": ep_title,
             "question_type_id": q.question_type_id,
             "difficulty_id": q.difficulty_id,
+            "unit_id": q.unit_id,
+            "exam_point_id": q.exam_point_id,
             "grade_id": q.grade_id,
             "subject_id": q.subject_id,
             "semester_id": q.semester_id,
-            "unit_id": q.unit_id,
             "knowledge_point_id": q.knowledge_point_id,
-            "exam_point_id": q.exam_point_id
         })
 
     return {
