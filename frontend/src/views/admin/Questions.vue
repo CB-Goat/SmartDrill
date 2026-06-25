@@ -87,6 +87,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '@/api'
+import axios from 'axios'
 
 const questions = ref<any[]>([])
 const showForm = ref(false)
@@ -119,24 +120,24 @@ async function handleImport(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
-  
+
   importing.value = true
   try {
     const formData = new FormData()
     formData.append('file', file)
-    
+
     const adminToken = localStorage.getItem('admin_token')
-    const response = await fetch('/api/admin/import-questions', {
-      method: 'POST',
+    const response = await axios.post('/api/admin/import-questions', formData, {
       headers: {
-        'Authorization': `Bearer ${adminToken}`
+        'Authorization': `Bearer ${adminToken}`,
+        'Content-Type': 'multipart/form-data'
       },
-      body: formData
+      timeout: 120000 // 120秒超时，导入大文件需要更长时间
     })
-    
-    const result = await response.json()
-    
-    if (response.ok) {
+
+    const result = response.data
+
+    if (result) {
       let msg = `导入完成！\n成功: ${result.imported}\n跳过: ${result.skipped}`
       if (result.skip_reasons) {
         msg += '\n\n跳过原因统计:'
@@ -152,11 +153,13 @@ async function handleImport(event: Event) {
       }
       alert(msg)
       onLoad()
-    } else {
-      alert('导入失败: ' + (result.detail || '未知错误'))
     }
-  } catch (error) {
-    alert('导入失败: ' + error)
+  } catch (error: any) {
+    if (error.code === 'ECONNABORTED') {
+      alert('导入超时，请尝试分批导入或联系管理员')
+    } else {
+      alert('导入失败: ' + (error.response?.data?.detail || error.message))
+    }
   } finally {
     importing.value = false
     if (target) target.value = ''
