@@ -13,6 +13,7 @@
 
     <div class="filter-bar">
       <select v-model="filterVersionId" @change="onVersionChange">
+        <option :value="null">全部版本</option>
         <option v-for="v in versions" :key="v.id" :value="v.id">{{ v.name }}</option>
       </select>
       <select v-model="filterGradeId" @change="onGradeChange">
@@ -315,61 +316,31 @@ const filteredUnits = computed(() => {
 })
 
 async function onLoad() {
-  const baseResults = await Promise.allSettled([
-    api.admin.getVersions(),
-    api.admin.getQuestionTypes(),
-    api.admin.getDifficulties()
-  ])
-
-  const extract = (result: any) => result.status === 'fulfilled' ? result.value : []
-
-  versions.value = extract(baseResults[0])
-  questionTypes.value = extract(baseResults[1])
-  
-  const rawDifficulties = extract(baseResults[2])
-  difficulties.value = normalizeDifficulties(rawDifficulties)
+  try {
+    const [vers, qts, diffs] = await Promise.all([
+      api.admin.getVersions(),
+      api.admin.getQuestionTypes(),
+      api.admin.getDifficulties()
+    ])
+    versions.value = vers || []
+    questionTypes.value = qts || []
+    difficulties.value = diffs || []
+  } catch (e) {
+    console.error('加载基础数据失败:', e)
+    versions.value = []
+    questionTypes.value = []
+    difficulties.value = []
+  }
 
   if (versions.value.length > 0 && !filterVersionId.value) {
     filterVersionId.value = versions.value[0].id
   }
 
   if (filterVersionId.value) {
-    api.admin.getGrades(filterVersionId.value).then(data => { grades.value = data }).catch(() => {})
+    api.admin.getGrades(filterVersionId.value).then(data => { grades.value = data || [] }).catch(() => {})
   }
 
   queryData()
-}
-
-function normalizeDifficulties(raw: any[]): any[] {
-  const nameMap: Record<string, string> = {
-    'easy': '简单',
-    'simple': '简单',
-    'normal': '普通',
-    'medium': '中等',
-    'hard': '困难',
-    'difficult': '困难',
-    '简单': '简单',
-    '普通': '普通',
-    '中等': '中等',
-    '困难': '困难'
-  }
-
-  const seen = new Set<string>()
-  const result: any[] = []
-
-  for (const item of raw) {
-    const cnName = nameMap[item.name] || item.name
-    if (!seen.has(cnName)) {
-      seen.add(cnName)
-      result.push({
-        id: item.id,
-        name: cnName,
-        originalName: item.name
-      })
-    }
-  }
-
-  return result
 }
 
 function onVersionChange() {

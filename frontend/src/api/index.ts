@@ -50,7 +50,7 @@ adminRequest.interceptors.response.use(
       localStorage.removeItem('admin_user')
       window.location.href = '/admin/login'
     } else {
-      showToast(error.response?.data?.message || '请求失败')
+      console.error('Admin API Error:', error.response?.data?.detail || error.response?.data?.message || error.message)
     }
     return Promise.reject(error)
   }
