@@ -346,8 +346,21 @@ function viewQuestion(q: any) {
 
 function formatJson(obj: any) {
   if (!obj) return '-'
+  const orderedKeys = ['question_type', 'stem', 'content', 'answer', 'analysis']
   try {
-    return JSON.stringify(obj, null, 2)
+    const parsed = typeof obj === 'string' ? JSON.parse(obj) : obj
+    const ordered: any = {}
+    for (const key of orderedKeys) {
+      if (parsed.hasOwnProperty(key)) {
+        ordered[key] = parsed[key]
+      }
+    }
+    for (const key of Object.keys(parsed)) {
+      if (!orderedKeys.includes(key)) {
+        ordered[key] = parsed[key]
+      }
+    }
+    return JSON.stringify(ordered, null, 2)
   } catch {
     return String(obj)
   }
