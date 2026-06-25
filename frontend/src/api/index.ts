@@ -4,7 +4,7 @@ import { showToast } from 'vant'
 
 const request = axios.create({
   baseURL: '/api',
-  timeout: 10000
+  timeout: 30000
 })
 
 request.interceptors.request.use(config => {
@@ -31,7 +31,7 @@ request.interceptors.response.use(
 
 const adminRequest = axios.create({
   baseURL: '/api',
-  timeout: 10000
+  timeout: 30000
 })
 
 adminRequest.interceptors.request.use(config => {
