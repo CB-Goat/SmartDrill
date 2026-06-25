@@ -7,7 +7,7 @@
           <input ref="fileInput" type="file" accept=".xlsx,.xls" @change="handleImport" style="display: none" />
           导入题库
         </button>
-        <button class="btn-primary" @click="showForm = true">添加题目</button>
+        <button class="btn-danger" @click="confirmClear">清除题库</button>
       </div>
     </div>
 
@@ -83,54 +83,6 @@
       </div>
     </div>
 
-    <div v-if="showForm" class="modal-overlay" @click="showForm = false">
-      <div class="modal-content" @click.stop>
-        <h3>{{ form.id ? '编辑题目' : '添加题目' }}</h3>
-        <form @submit.prevent="onSubmit">
-          <div class="form-item">
-            <label>单元ID</label>
-            <input v-model="form.unit_id" type="number" required />
-          </div>
-          <div class="form-item">
-            <label>题目</label>
-            <textarea v-model="form.question" rows="3" required></textarea>
-          </div>
-          <div class="form-item">
-            <label>答案</label>
-            <textarea v-model="form.answer" rows="3" required></textarea>
-          </div>
-          <div class="form-item">
-            <label>题型</label>
-            <select v-model="form.question_type">
-              <option value="choice">选择题</option>
-              <option value="fill">填空题</option>
-              <option value="answer">简答题</option>
-            </select>
-          </div>
-          <div class="form-item">
-            <label>难度</label>
-            <select v-model="form.difficulty">
-              <option value="easy">简单</option>
-              <option value="medium">中等</option>
-              <option value="hard">困难</option>
-            </select>
-          </div>
-          <div class="form-item">
-            <label>考试类型</label>
-            <select v-model="form.exam_type">
-              <option value="unit">单元测试</option>
-              <option value="midterm">期中考试</option>
-              <option value="final">期末考试</option>
-            </select>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="btn-default" @click="showForm = false">取消</button>
-            <button type="submit" class="btn-primary">保存</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
     <div v-if="viewVisible" class="modal-overlay" @click="viewVisible = false">
       <div class="modal-content large-modal" @click.stop>
         <div class="modal-header">
@@ -185,21 +137,45 @@
         </div>
       </div>
     </div>
+
+    <div v-if="clearConfirmVisible" class="modal-overlay" @click="clearConfirmVisible = false">
+      <div class="modal-content" @click.stop>
+        <h3>确认清除题库</h3>
+        <p style="margin: 16px 0; color: rgba(0,0,0,0.85);">
+          确定要清除以下范围的题目吗？<br/>
+          此操作不可恢复！
+        </p>
+        <div class="clear-scope-info">
+          <div v-if="filterVersionId">版本：{{ getVersionName(filterVersionId) }}</div>
+          <div v-if="filterGradeId">年级：{{ getGradeName(filterGradeId) }}</div>
+          <div v-if="filterSubjectId">科目：{{ getSubjectName(filterSubjectId) }}</div>
+          <div v-if="filterSemesterId">学期：{{ getSemesterName(filterSemesterId) }}</div>
+          <div v-if="filterUnitId">单元：{{ getUnitName(filterUnitId) }}</div>
+          <div v-if="!filterGradeId && !filterSubjectId && !filterSemesterId && !filterUnitId" style="color: #ff4d4f;">
+            未选择具体范围，将清除该版本下所有题目！
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-default" @click="clearConfirmVisible = false">取消</button>
+          <button type="button" class="btn-danger" @click="clearQuestions" :disabled="clearing">确认清除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api } from '@/api'
 import axios from 'axios'
 
 const questions = ref<any[]>([])
-const showForm = ref(false)
 const viewVisible = ref(false)
 const currentQuestion = ref<any>(null)
-const form = reactive({ id: 0, unit_id: 1, question: '', answer: '', question_type: 'choice', difficulty: 'medium', exam_type: 'unit' })
 const fileInput = ref<HTMLInputElement | null>(null)
 const importing = ref(false)
+const clearConfirmVisible = ref(false)
+const clearing = ref(false)
 
 const versions = ref<any[]>([])
 const grades = ref<any[]>([])
@@ -366,16 +342,53 @@ function formatJson(obj: any) {
   }
 }
 
-function editItem(item: any) {
-  Object.assign(form, item)
-  showForm.value = true
+function getVersionName(id: number) {
+  return versions.value.find(v => v.id === id)?.name || '-'
 }
 
-async function onSubmit() {
-  await api.admin.saveQuestion(form)
-  showForm.value = false
-  Object.assign(form, { id: 0, unit_id: 1, question: '', answer: '', question_type: 'choice', difficulty: 'medium', exam_type: 'unit' })
-  loadQuestions()
+function getGradeName(id: number | null) {
+  if (!id) return '-'
+  return grades.value.find(g => g.id === id)?.name || '-'
+}
+
+function getSubjectName(id: number | null) {
+  if (!id) return '-'
+  return subjects.value.find(s => s.id === id)?.name || '-'
+}
+
+function getSemesterName(id: number | null) {
+  if (!id) return '-'
+  return semesters.value.find(s => s.id === id)?.name || '-'
+}
+
+function getUnitName(id: number | null) {
+  if (!id) return '-'
+  return units.value.find(u => u.id === id)?.name || '-'
+}
+
+function confirmClear() {
+  clearConfirmVisible.value = true
+}
+
+async function clearQuestions() {
+  clearing.value = true
+  try {
+    const params: any = {}
+    if (filterVersionId.value) params.version_id = filterVersionId.value
+    if (filterGradeId.value) params.grade_id = filterGradeId.value
+    if (filterSubjectId.value) params.subject_id = filterSubjectId.value
+    if (filterSemesterId.value) params.semester_id = filterSemesterId.value
+    if (filterUnitId.value) params.unit_id = filterUnitId.value
+
+    const res: any = await api.admin.deleteQuestions(params)
+    alert(res.message || `成功删除 ${res.deleted} 道题目`)
+    clearConfirmVisible.value = false
+    loadQuestions()
+  } catch (error: any) {
+    alert('清除失败: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    clearing.value = false
+  }
 }
 
 function triggerImport() {
@@ -512,6 +525,25 @@ onMounted(onLoad)
   cursor: not-allowed;
 }
 
+.btn-danger {
+  background: #fff;
+  color: #ff4d4f;
+  border: 1px solid #ff4d4f;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-link {
   background: none;
   color: #1890ff;
@@ -575,6 +607,17 @@ onMounted(onLoad)
 
 .modal-body {
   padding: 0;
+}
+
+.clear-scope-info {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.clear-scope-info div {
+  margin-bottom: 4px;
 }
 
 .detail-row {

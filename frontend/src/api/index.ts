@@ -123,6 +123,7 @@ export const api = {
     getQuestionTypes: () => adminRequest.get('/admin/question-types'),
     getDifficulties: () => adminRequest.get('/admin/difficulties'),
     getQuestions: (params?: any) => adminRequest.get('/admin/questions', { params }),
+    deleteQuestions: (params?: any) => adminRequest.delete('/admin/questions', { params }),
     saveQuestion: (data: any) => adminRequest.post('/admin/questions', data)
   }
 }

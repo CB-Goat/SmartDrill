@@ -310,3 +310,31 @@ def save_question(data: dict, admin: User = Depends(get_current_admin), db: Sess
     db.commit()
     db.refresh(q)
     return {"id": q.id, "message": "保存成功"}
+
+@router.delete("/questions")
+def delete_questions(
+    version_id: int = None,
+    grade_id: int = None,
+    subject_id: int = None,
+    semester_id: int = None,
+    unit_id: int = None,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Question)
+    if version_id:
+        query = query.filter(Question.version_id == version_id)
+    if grade_id:
+        query = query.filter(Question.grade_id == grade_id)
+    if subject_id:
+        query = query.filter(Question.subject_id == subject_id)
+    if semester_id:
+        query = query.filter(Question.semester_id == semester_id)
+    if unit_id:
+        query = query.filter(Question.unit_id == unit_id)
+
+    count = query.count()
+    query.delete()
+    db.commit()
+
+    return {"deleted": count, "message": f"成功删除 {count} 道题目"}
