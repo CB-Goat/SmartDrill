@@ -161,11 +161,84 @@
         </div>
       </div>
     </div>
+
+    <div v-if="importDialogVisible" class="modal-overlay">
+      <div class="modal-content import-modal" @click.stop>
+        <div class="modal-header">
+          <h3>题库导入</h3>
+          <button v-if="importStatus === 'completed' || importStatus === 'error'" class="close-btn" @click="closeImportDialog">×</button>
+        </div>
+        <div class="modal-body import-body">
+          <div class="import-status">
+            <div v-if="importStatus === 'uploading'" class="status-uploading">
+              <div class="status-icon">⏳</div>
+              <div class="status-text">文件上传中...</div>
+            </div>
+            <div v-else-if="importStatus === 'processing'" class="status-processing">
+              <div class="status-icon">📥</div>
+              <div class="status-text">正在导入题库...</div>
+            </div>
+            <div v-else-if="importStatus === 'completed'" class="status-completed">
+              <div class="status-icon">✅</div>
+              <div class="status-text">导入完成</div>
+            </div>
+            <div v-else class="status-error">
+              <div class="status-icon">❌</div>
+              <div class="status-text">导入失败</div>
+            </div>
+          </div>
+
+          <div v-if="importProgress.total > 0" class="progress-section">
+            <div class="progress-info">
+              <span>进度: {{ importProgress.current }} / {{ importProgress.total }}</span>
+              <span class="progress-percent">{{ getProgressPercent() }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: getProgressPercent() + '%' }"></div>
+            </div>
+            <div class="progress-stats">
+              <span class="stat-imported">✓ 成功: {{ importProgress.imported }}</span>
+              <span class="stat-skipped">⊘ 跳过: {{ importProgress.skipped }}</span>
+            </div>
+          </div>
+
+          <div v-if="importResult && importResult.skip_reasons" class="result-section">
+            <h4>跳过原因统计</h4>
+            <div class="reasons-list">
+              <div v-for="(count, reason) in importResult.skip_reasons" :key="reason" class="reason-item" v-show="count > 0">
+                <span>{{ reason }}</span>
+                <span class="reason-count">{{ count }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="importResult && importResult.skip_details && importResult.skip_details.length > 0" class="result-section">
+            <h4>跳过详情 (前{{ importResult.skip_details.length }}条)</h4>
+            <ul class="details-list">
+              <li v-for="(detail, idx) in importResult.skip_details" :key="idx">{{ detail }}</li>
+            </ul>
+          </div>
+
+          <div class="logs-section">
+            <h4>实时日志</h4>
+            <div class="log-container" ref="logContainer">
+              <div v-for="(log, idx) in importLogs" :key="idx" class="log-item">{{ log }}</div>
+              <div v-if="importLogs.length === 0" class="log-empty">暂无日志</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button v-if="importStatus === 'completed'" type="button" class="btn-primary" @click="closeImportDialog(); loadQuestions();">关闭并刷新</button>
+          <button v-else-if="importStatus === 'error'" type="button" class="btn-default" @click="closeImportDialog">关闭</button>
+          <button v-else type="button" class="btn-default" @click="closeImportDialog" disabled>导入中...</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { api } from '@/api'
 import axios from 'axios'
 
@@ -176,6 +249,19 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const importing = ref(false)
 const clearConfirmVisible = ref(false)
 const clearing = ref(false)
+
+const importDialogVisible = ref(false)
+const importStatus = ref<'uploading' | 'processing' | 'completed' | 'error'>('uploading')
+const importProgress = ref({
+  current: 0,
+  total: 0,
+  imported: 0,
+  skipped: 0
+})
+const importLogs = ref<string[]>([])
+const importResult = ref<any>(null)
+const importLastReason = ref<string>('')
+const logContainer = ref<HTMLElement | null>(null)
 
 const versions = ref<any[]>([])
 const grades = ref<any[]>([])
@@ -400,49 +486,118 @@ async function handleImport(event: Event) {
   const file = target.files?.[0]
   if (!file) return
 
-  importing.value = true
+  importDialogVisible.value = true
+  importStatus.value = 'uploading'
+  importProgress.value = {
+    current: 0,
+    total: 0,
+    imported: 0,
+    skipped: 0
+  }
+  importLogs.value = []
+  importResult.value = null
+
   try {
     const formData = new FormData()
     formData.append('file', file)
 
     const adminToken = localStorage.getItem('admin_token')
-    const response = await axios.post('/api/admin/import-questions', formData, {
-      headers: {
-        'Authorization': `Bearer ${adminToken}`,
-        'Content-Type': 'multipart/form-data'
-      },
-      timeout: 120000
-    })
 
-    const result = response.data
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/admin/import-questions', true)
+    xhr.setRequestHeader('Authorization', `Bearer ${adminToken}`)
 
-    if (result) {
-      let msg = `导入完成！\n成功: ${result.imported}\n跳过: ${result.skipped}`
-      if (result.skip_reasons) {
-        msg += '\n\n跳过原因统计:'
-        for (const [reason, count] of Object.entries(result.skip_reasons)) {
-          if (count && (count as number) > 0) {
-            msg += `\n  ${reason}: ${count}`
+    importStatus.value = 'processing'
+
+    xhr.onprogress = () => {}
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 3 || xhr.readyState === 4) {
+        const lines = xhr.responseText.split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const data = line.substring(5).trim()
+            if (!data) continue
+            try {
+              const event = JSON.parse(data)
+              handleImportEvent(event)
+            } catch (e) {
+              console.error('解析SSE数据失败:', e, data)
+            }
           }
         }
       }
-      if (result.skip_details && result.skip_details.length > 0) {
-        msg += `\n\n部分跳过详情(前${result.skip_details.length}条):\n`
-        msg += result.skip_details.slice(0, 10).join('\n')
+    }
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        if (importStatus.value === 'processing') {
+          importStatus.value = 'completed'
+        }
+      } else {
+        importStatus.value = 'error'
+        importLogs.value.push(`错误: HTTP ${xhr.status}`)
       }
-      alert(msg)
-      loadQuestions()
     }
+
+    xhr.onerror = () => {
+      importStatus.value = 'error'
+      importLogs.value.push('网络错误，上传失败')
+    }
+
+    xhr.send(formData)
   } catch (error: any) {
-    if (error.code === 'ECONNABORTED') {
-      alert('导入超时，请尝试分批导入或联系管理员')
-    } else {
-      alert('导入失败: ' + (error.response?.data?.detail || error.message))
-    }
+    importStatus.value = 'error'
+    importLogs.value.push('错误: ' + (error.message || '未知错误'))
   } finally {
-    importing.value = false
     if (target) target.value = ''
   }
+}
+
+function handleImportEvent(event: any) {
+  if (event.total !== undefined && importProgress.value.total === 0) {
+    importProgress.value.total = event.total
+    addLog(`开始处理，共 ${event.total} 行数据`)
+  }
+
+  if (event.current !== undefined) {
+    importProgress.value.current = event.current
+    importProgress.value.imported = event.imported || 0
+    importProgress.value.skipped = event.skipped || 0
+
+    if (event.reason && event.reason !== importLastReason.value) {
+      addLog(`第 ${event.current} 行: ${event.reason}`)
+      importLastReason.value = event.reason
+    }
+  }
+
+  if (event.message && event.imported !== undefined) {
+    importResult.value = event
+    importStatus.value = 'completed'
+    addLog(`导入完成: 成功 ${event.imported}, 跳过 ${event.skipped}`)
+  }
+}
+
+function addLog(message: string) {
+  const timestamp = new Date().toLocaleTimeString()
+  importLogs.value.push(`[${timestamp}] ${message}`)
+  if (importLogs.value.length > 200) {
+    importLogs.value = importLogs.value.slice(-200)
+  }
+  nextTick(() => {
+    if (logContainer.value) {
+      logContainer.value.scrollTop = logContainer.value.scrollHeight
+    }
+  })
+}
+
+function closeImportDialog() {
+  importDialogVisible.value = false
+}
+
+function getProgressPercent(): number {
+  if (importProgress.value.total === 0) return 0
+  return Math.round((importProgress.value.current / importProgress.value.total) * 100)
 }
 
 onMounted(onLoad)
@@ -576,6 +731,160 @@ onMounted(onLoad)
 
 .large-modal {
   width: 900px;
+}
+
+.import-modal {
+  width: 700px;
+  max-height: 85vh;
+}
+
+.import-body {
+  padding: 0;
+}
+
+.import-status {
+  text-align: center;
+  padding: 24px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.status-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.status-text {
+  font-size: 18px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.status-completed .status-text {
+  color: #52c41a;
+}
+
+.status-error .status-text {
+  color: #ff4d4f;
+}
+
+.progress-section {
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.progress-percent {
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1890ff, #36cfc9);
+  transition: width 0.3s ease;
+}
+
+.progress-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.stat-imported {
+  color: #52c41a;
+}
+
+.stat-skipped {
+  color: #fa8c16;
+}
+
+.result-section {
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.result-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.reasons-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.reason-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.reason-count {
+  color: #ff4d4f;
+  font-weight: 500;
+}
+
+.details-list {
+  margin: 0;
+  padding-left: 20px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.details-list li {
+  margin-bottom: 4px;
+}
+
+.logs-section {
+  padding: 16px 0 0 0;
+}
+
+.logs-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.log-container {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 4px;
+  height: 200px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.log-item {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-empty {
+  color: #888;
+  font-style: italic;
 }
 
 .modal-header {

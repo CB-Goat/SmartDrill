@@ -17,6 +17,9 @@ from docx.oxml import OxmlElement
 from io import BytesIO
 from typing import List
 from urllib.parse import quote
+import json
+from sse_starlette.sse import EventSourceResponse
+import asyncio
 
 router = APIRouter(prefix="/admin", tags=["知识考点管理"])
 
@@ -1021,13 +1024,13 @@ async def import_questions(
 ):
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="只支持Excel文件")
-    
+
     wb = load_workbook(BytesIO(await file.read()))
     ws = wb.active
-    
+
     question_types_cache = {}
     difficulties_cache = {}
-    
+
     imported = 0
     skipped = 0
     errors = []
@@ -1040,133 +1043,237 @@ async def import_questions(
         "其他错误": 0
     }
     skip_details = []
-    
-    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if not row[0]:
-            skip_reasons["首列为空"] += 1
-            skipped += 1
-            continue
-        
-        try:
-            subject_name = row[0]
-            grade_name = row[1]
-            semester_name = row[2]
-            unit_number = row[3]
-            unit_name = row[5]
-            exam_point_title = row[6]
-            question_type_name = row[9]
-            difficulty_name = row[10]
-            stem_text = row[11]
-            answer_text = row[12]
-            analysis_text = row[13]
-            json_content = row[14]
-            
-            grade = db.query(Grade).filter(Grade.name == grade_name).first()
-            if not grade:
-                skip_reasons["年级不存在"] += 1
+
+    total_rows = ws.max_row - 1
+
+    async def event_generator():
+        nonlocal imported, skipped, errors, skip_reasons, skip_details
+
+        yield {"event": "start", "data": json.dumps({"total": total_rows}, ensure_ascii=False)}
+
+        processed = 0
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row[0]:
+                skip_reasons["首列为空"] += 1
                 skipped += 1
-                skip_details.append(f"第{row_idx}行: 年级'{grade_name}'不存在")
+                skip_details.append(f"第{row_idx}行: 首列为空")
+                processed += 1
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({
+                        "current": processed,
+                        "total": total_rows,
+                        "imported": imported,
+                        "skipped": skipped,
+                        "reason": "首列为空"
+                    }, ensure_ascii=False)
+                }
                 continue
-            
-            subject = db.query(Subject).filter(
-                Subject.grade_id == grade.id,
-                Subject.name == subject_name
-            ).first()
-            if not subject:
-                skip_reasons["科目不存在"] += 1
-                skipped += 1
-                skip_details.append(f"第{row_idx}行: 科目'{subject_name}'不存在")
-                continue
-            
-            semester = db.query(Semester).filter(
-                Semester.subject_id == subject.id,
-                Semester.name.like(f"%{semester_name}%")
-            ).first()
-            if not semester:
-                skip_reasons["学期不存在"] += 1
-                skipped += 1
-                skip_details.append(f"第{row_idx}行: 学期'{semester_name}'不存在")
-                continue
-            
-            unit = db.query(Unit).filter(
-                Unit.semester_id == semester.id,
-                Unit.unit_number == int(unit_number) if unit_number else None
-            ).first()
-            if not unit:
+
+            try:
+                subject_name = row[0]
+                grade_name = row[1]
+                semester_name = row[2]
+                unit_number = row[3]
+                unit_name = row[5]
+                exam_point_title = row[6]
+                question_type_name = row[9]
+                difficulty_name = row[10]
+                stem_text = row[11]
+                answer_text = row[12]
+                analysis_text = row[13]
+                json_content = row[14]
+
+                grade = db.query(Grade).filter(Grade.name == grade_name).first()
+                if not grade:
+                    skip_reasons["年级不存在"] += 1
+                    skipped += 1
+                    skip_details.append(f"第{row_idx}行: 年级'{grade_name}'不存在")
+                    processed += 1
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "current": processed,
+                            "total": total_rows,
+                            "imported": imported,
+                            "skipped": skipped,
+                            "reason": f"年级'{grade_name}'不存在"
+                        }, ensure_ascii=False)
+                    }
+                    continue
+
+                subject = db.query(Subject).filter(
+                    Subject.grade_id == grade.id,
+                    Subject.name == subject_name
+                ).first()
+                if not subject:
+                    skip_reasons["科目不存在"] += 1
+                    skipped += 1
+                    skip_details.append(f"第{row_idx}行: 科目'{subject_name}'不存在")
+                    processed += 1
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "current": processed,
+                            "total": total_rows,
+                            "imported": imported,
+                            "skipped": skipped,
+                            "reason": f"科目'{subject_name}'不存在"
+                        }, ensure_ascii=False)
+                    }
+                    continue
+
+                semester = db.query(Semester).filter(
+                    Semester.subject_id == subject.id,
+                    Semester.name.like(f"%{semester_name}%")
+                ).first()
+                if not semester:
+                    skip_reasons["学期不存在"] += 1
+                    skipped += 1
+                    skip_details.append(f"第{row_idx}行: 学期'{semester_name}'不存在")
+                    processed += 1
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "current": processed,
+                            "total": total_rows,
+                            "imported": imported,
+                            "skipped": skipped,
+                            "reason": f"学期'{semester_name}'不存在"
+                        }, ensure_ascii=False)
+                    }
+                    continue
+
                 unit = db.query(Unit).filter(
                     Unit.semester_id == semester.id,
-                    Unit.name == unit_name
+                    Unit.unit_number == int(unit_number) if unit_number else None
                 ).first()
-            if not unit:
-                skip_reasons["单元不存在"] += 1
+                if not unit:
+                    unit = db.query(Unit).filter(
+                        Unit.semester_id == semester.id,
+                        Unit.name == unit_name
+                    ).first()
+                if not unit:
+                    skip_reasons["单元不存在"] += 1
+                    skipped += 1
+                    skip_details.append(f"第{row_idx}行: 单元'{unit_name}'(序号{unit_number})不存在")
+                    processed += 1
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "current": processed,
+                            "total": total_rows,
+                            "imported": imported,
+                            "skipped": skipped,
+                            "reason": f"单元'{unit_name}'(序号{unit_number})不存在"
+                        }, ensure_ascii=False)
+                    }
+                    continue
+
+                exam_point = None
+                if exam_point_title:
+                    exam_point = db.query(ExamPoint).filter(
+                        ExamPoint.unit_id == unit.id,
+                        ExamPoint.title == exam_point_title
+                    ).first()
+
+                if question_type_name not in question_types_cache:
+                    qt = db.query(QuestionType).filter(QuestionType.name == question_type_name).first()
+                    if not qt:
+                        qt = QuestionType(name=question_type_name)
+                        db.add(qt)
+                        db.commit()
+                    question_types_cache[question_type_name] = qt.id
+                question_type_id = question_types_cache[question_type_name]
+
+                if difficulty_name not in difficulties_cache:
+                    diff = db.query(Difficulty).filter(Difficulty.name == difficulty_name).first()
+                    if not diff:
+                        diff = Difficulty(name=difficulty_name)
+                        db.add(diff)
+                        db.commit()
+                    difficulties_cache[difficulty_name] = diff.id
+                difficulty_id = difficulties_cache[difficulty_name]
+
+                question_json = None
+                if json_content:
+                    try:
+                        question_json = json.loads(json_content) if isinstance(json_content, str) else json_content
+                    except:
+                        pass
+
+                question = Question(
+                    version_id=grade.version_id,
+                    grade_id=grade.id,
+                    subject_id=subject.id,
+                    semester_id=semester.id,
+                    unit_id=unit.id,
+                    exam_point_id=exam_point.id if exam_point else None,
+                    question_type_id=question_type_id,
+                    difficulty_id=difficulty_id,
+                    content=stem_text or "",
+                    answer=answer_text or "",
+                    analysis=analysis_text or "",
+                    question_json=question_json,
+                    question_type=question_type_name,
+                    stem=stem_text
+                )
+                db.add(question)
+                imported += 1
+                processed += 1
+
+                if processed % 10 == 0 or processed == total_rows:
+                    db.commit()
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "current": processed,
+                            "total": total_rows,
+                            "imported": imported,
+                            "skipped": skipped,
+                            "reason": None
+                        }, ensure_ascii=False)
+                    }
+                else:
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "current": processed,
+                            "total": total_rows,
+                            "imported": imported,
+                            "skipped": skipped,
+                            "reason": None
+                        }, ensure_ascii=False)
+                    }
+
+            except Exception as e:
+                skip_reasons["其他错误"] += 1
+                errors.append(f"第{row_idx}行: {str(e)}")
                 skipped += 1
-                skip_details.append(f"第{row_idx}行: 单元'{unit_name}'(序号{unit_number})不存在")
-                continue
-            
-            exam_point = None
-            if exam_point_title:
-                exam_point = db.query(ExamPoint).filter(
-                    ExamPoint.unit_id == unit.id,
-                    ExamPoint.title == exam_point_title
-                ).first()
-            
-            if question_type_name not in question_types_cache:
-                qt = db.query(QuestionType).filter(QuestionType.name == question_type_name).first()
-                if not qt:
-                    qt = QuestionType(name=question_type_name)
-                    db.add(qt)
-                    db.commit()
-                question_types_cache[question_type_name] = qt.id
-            question_type_id = question_types_cache[question_type_name]
-            
-            if difficulty_name not in difficulties_cache:
-                diff = db.query(Difficulty).filter(Difficulty.name == difficulty_name).first()
-                if not diff:
-                    diff = Difficulty(name=difficulty_name)
-                    db.add(diff)
-                    db.commit()
-                difficulties_cache[difficulty_name] = diff.id
-            difficulty_id = difficulties_cache[difficulty_name]
-            
-            import json
-            question_json = None
-            if json_content:
-                try:
-                    question_json = json.loads(json_content) if isinstance(json_content, str) else json_content
-                except:
-                    pass
-            
-            question = Question(
-                version_id=grade.version_id,
-                grade_id=grade.id,
-                subject_id=subject.id,
-                semester_id=semester.id,
-                unit_id=unit.id,
-                exam_point_id=exam_point.id if exam_point else None,
-                question_type_id=question_type_id,
-                difficulty_id=difficulty_id,
-                content=stem_text or "",
-                answer=answer_text or "",
-                analysis=analysis_text or "",
-                question_json=question_json,
-                question_type=question_type_name,
-                stem=stem_text
-            )
-            db.add(question)
-            imported += 1
-            
-        except Exception as e:
-            skip_reasons["其他错误"] += 1
-            errors.append(f"第{row_idx}行: {str(e)}")
-            skipped += 1
-    
-    db.commit()
-    
-    return {
-        "message": "题库导入完成",
-        "imported": imported,
-        "skipped": skipped,
-        "skip_reasons": skip_reasons,
-        "skip_details": skip_details[:20],
-        "errors": errors[:10]
-    }
+                processed += 1
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({
+                        "current": processed,
+                        "total": total_rows,
+                        "imported": imported,
+                        "skipped": skipped,
+                        "reason": f"错误: {str(e)}"
+                    }, ensure_ascii=False)
+                }
+
+        db.commit()
+
+        yield {
+            "event": "complete",
+            "data": json.dumps({
+                "message": "题库导入完成",
+                "imported": imported,
+                "skipped": skipped,
+                "skip_reasons": skip_reasons,
+                "skip_details": skip_details[:20],
+                "errors": errors[:10]
+            }, ensure_ascii=False)
+        }
+
+    return EventSourceResponse(event_generator())
