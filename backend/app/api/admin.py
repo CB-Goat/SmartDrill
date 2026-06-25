@@ -25,9 +25,17 @@ def get_orders(admin: User = Depends(get_current_admin), db: Session = Depends(g
     orders = db.query(Order).order_by(Order.created_at.desc()).all()
     return [{"id": o.id, "username": o.user.username, "title": o.title, "points": o.points, "created_at": o.created_at} for o in orders]
 
+import time
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 @router.get("/versions")
 def get_versions(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    return db.query(Version).all()
+    start = time.time()
+    result = db.query(Version).all()
+    logger.info(f"get_versions: {time.time()-start:.3f}s, {len(result)} rows")
+    return result
 
 @router.post("/versions")
 def save_version(data: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
