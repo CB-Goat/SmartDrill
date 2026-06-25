@@ -325,7 +325,9 @@ async function onLoad() {
 
   versions.value = extract(baseResults[0])
   questionTypes.value = extract(baseResults[1])
-  difficulties.value = extract(baseResults[2])
+  
+  const rawDifficulties = extract(baseResults[2])
+  difficulties.value = normalizeDifficulties(rawDifficulties)
 
   if (versions.value.length > 0 && !filterVersionId.value) {
     filterVersionId.value = versions.value[0].id
@@ -338,26 +340,76 @@ async function onLoad() {
   queryData()
 }
 
+function normalizeDifficulties(raw: any[]): any[] {
+  const nameMap: Record<string, string> = {
+    'easy': '简单',
+    'simple': '简单',
+    'normal': '普通',
+    'medium': '中等',
+    'hard': '困难',
+    'difficult': '困难',
+    '简单': '简单',
+    '普通': '普通',
+    '中等': '中等',
+    '困难': '困难'
+  }
+
+  const seen = new Set<string>()
+  const result: any[] = []
+
+  for (const item of raw) {
+    const cnName = nameMap[item.name] || item.name
+    if (!seen.has(cnName)) {
+      seen.add(cnName)
+      result.push({
+        id: item.id,
+        name: cnName,
+        originalName: item.name
+      })
+    }
+  }
+
+  return result
+}
+
 function onVersionChange() {
   filterGradeId.value = null
   filterSubjectId.value = null
   filterSemesterId.value = null
   filterUnitId.value = null
+  subjects.value = []
+  semesters.value = []
+  units.value = []
+  if (filterVersionId.value) {
+    api.admin.getGrades(filterVersionId.value).then(data => { grades.value = data }).catch(() => {})
+  }
 }
 
 function onGradeChange() {
   filterSubjectId.value = null
   filterSemesterId.value = null
   filterUnitId.value = null
+  semesters.value = []
+  units.value = []
+  if (filterGradeId.value) {
+    api.admin.getSubjects(filterGradeId.value).then(data => { subjects.value = data }).catch(() => {})
+  }
 }
 
 function onSubjectChange() {
   filterSemesterId.value = null
   filterUnitId.value = null
+  units.value = []
+  if (filterSubjectId.value) {
+    api.admin.getSemesters(filterSubjectId.value).then(data => { semesters.value = data }).catch(() => {})
+  }
 }
 
 function onSemesterChange() {
   filterUnitId.value = null
+  if (filterSemesterId.value) {
+    api.admin.getUnits(filterSemesterId.value).then(data => { units.value = data }).catch(() => {})
+  }
 }
 
 async function queryData() {
