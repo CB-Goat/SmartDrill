@@ -2,7 +2,13 @@
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px">
       <h2 style="margin: 0">题库管理</h2>
-      <button class="btn-primary" @click="showForm = true">添加题目</button>
+      <div style="display: flex; gap: 12px">
+        <button class="btn-default" @click="triggerImport">
+          <input ref="fileInput" type="file" accept=".xlsx,.xls" @change="handleImport" style="display: none" />
+          导入题库
+        </button>
+        <button class="btn-primary" @click="showForm = true">添加题目</button>
+      </div>
     </div>
     <table class="data-table">
       <thead>
@@ -85,6 +91,8 @@ import { api } from '@/api'
 const questions = ref<any[]>([])
 const showForm = ref(false)
 const form = reactive({ id: 0, unit_id: 1, question: '', answer: '', question_type: 'choice', difficulty: 'medium', exam_type: 'unit' })
+const fileInput = ref<HTMLInputElement | null>(null)
+const importing = ref(false)
 
 async function onLoad() {
   const res = await api.admin.getQuestions()
@@ -101,6 +109,41 @@ async function onSubmit() {
   showForm.value = false
   Object.assign(form, { id: 0, unit_id: 1, question: '', answer: '', question_type: 'choice', difficulty: 'medium', exam_type: 'unit' })
   onLoad()
+}
+
+function triggerImport() {
+  fileInput.value?.click()
+}
+
+async function handleImport(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  
+  importing.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch('/api/admin/import-questions', {
+      method: 'POST',
+      body: formData
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok) {
+      alert(`导入完成！\n成功: ${result.imported}\n跳过: ${result.skipped}`)
+      onLoad()
+    } else {
+      alert('导入失败: ' + (result.detail || '未知错误'))
+    }
+  } catch (error) {
+    alert('导入失败: ' + error)
+  } finally {
+    importing.value = false
+    if (target) target.value = ''
+  }
 }
 
 onMounted(onLoad)
@@ -148,6 +191,11 @@ onMounted(onLoad)
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.btn-default:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-link {
