@@ -262,6 +262,7 @@ const importLogs = ref<string[]>([])
 const importResult = ref<any>(null)
 const importLastReason = ref<string>('')
 const logContainer = ref<HTMLElement | null>(null)
+const processedOffset = ref(0)
 
 const versions = ref<any[]>([])
 const grades = ref<any[]>([])
@@ -496,6 +497,7 @@ async function handleImport(event: Event) {
   }
   importLogs.value = []
   importResult.value = null
+  processedOffset.value = 0
 
   try {
     const formData = new FormData()
@@ -509,48 +511,70 @@ async function handleImport(event: Event) {
 
     importStatus.value = 'processing'
 
-    xhr.onprogress = () => {}
+    xhr.onprogress = () => {
+      parseSSEData(xhr.responseText)
+    }
 
     xhr.onreadystatechange = () => {
-      if (xhr.readyState === 3 || xhr.readyState === 4) {
-        const lines = xhr.responseText.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const data = line.substring(5).trim()
-            if (!data) continue
-            try {
-              const event = JSON.parse(data)
-              handleImportEvent(event)
-            } catch (e) {
-              console.error('解析SSE数据失败:', e, data)
-            }
-          }
-        }
+      if (xhr.readyState === 3) {
+        parseSSEData(xhr.responseText)
       }
     }
 
     xhr.onload = () => {
+      parseSSEData(xhr.responseText)
       if (xhr.status === 200) {
         if (importStatus.value === 'processing') {
           importStatus.value = 'completed'
         }
       } else {
         importStatus.value = 'error'
-        importLogs.value.push(`错误: HTTP ${xhr.status}`)
+        addLog(`错误: HTTP ${xhr.status}`)
       }
     }
 
     xhr.onerror = () => {
       importStatus.value = 'error'
-      importLogs.value.push('网络错误，上传失败')
+      addLog('网络错误，上传失败')
     }
 
     xhr.send(formData)
   } catch (error: any) {
     importStatus.value = 'error'
-    importLogs.value.push('错误: ' + (error.message || '未知错误'))
+    addLog('错误: ' + (error.message || '未知错误'))
   } finally {
     if (target) target.value = ''
+  }
+}
+
+function parseSSEData(fullText: string) {
+  const newText = fullText.substring(processedOffset.value)
+  if (!newText) return
+
+  const lines = newText.split('\n')
+  let dataLines: string[] = []
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const line = lines[i].trim()
+    if (line === '') {
+      if (dataLines.length > 0) {
+        const dataStr = dataLines.join('\n')
+        try {
+          const event = JSON.parse(dataStr)
+          handleImportEvent(event)
+        } catch (e) {
+          console.error('解析SSE数据失败:', e, dataStr)
+        }
+        dataLines = []
+      }
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.substring(5).trim())
+    }
+  }
+
+  const lastNewLine = fullText.lastIndexOf('\n\n')
+  if (lastNewLine !== -1) {
+    processedOffset.value = lastNewLine + 2
   }
 }
 
