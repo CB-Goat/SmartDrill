@@ -34,6 +34,16 @@
         </tr>
       </tbody>
     </table>
+    <!-- 分页控件 -->
+    <div v-if="total > 0" class="pagination">
+      <div class="pagination-info">共 {{ total }} 条，第 {{ currentPage }}/{{ totalPages }} 页</div>
+      <div class="pagination-controls">
+        <button class="btn-default" :disabled="currentPage <= 1" @click="onPageChange(1)">首页</button>
+        <button class="btn-default" :disabled="currentPage <= 1" @click="onPageChange(currentPage - 1)">上一页</button>
+        <button class="btn-default" :disabled="currentPage >= totalPages" @click="onPageChange(currentPage + 1)">下一页</button>
+        <button class="btn-default" :disabled="currentPage >= totalPages" @click="onPageChange(totalPages)">末页</button>
+      </div>
+    </div>
     <div v-if="showForm" class="modal-overlay" @click="showForm = false">
       <div class="modal-content" @click.stop>
         <h3>{{ form.id ? '编辑题目' : '添加题目' }}</h3>
@@ -95,9 +105,23 @@ const form = reactive({ id: 0, unit_id: 1, question: '', answer: '', question_ty
 const fileInput = ref<HTMLInputElement | null>(null)
 const importing = ref(false)
 
+// 分页状态
+const currentPage = ref(1)
+const pageSize = ref(50)
+const total = ref(0)
+const totalPages = ref(0)
+
 async function onLoad() {
-  const res = await api.admin.getQuestions()
-  questions.value = res
+  const res: any = await api.admin.getQuestions(currentPage.value, pageSize.value)
+  questions.value = res.items || []
+  total.value = res.total || 0
+  totalPages.value = res.total_pages || 0
+}
+
+function onPageChange(page: number) {
+  currentPage.value = page
+  onLoad()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function editItem(item: any) {
@@ -272,5 +296,35 @@ onMounted(onLoad)
   justify-content: flex-end;
   gap: 8px;
   margin-top: 24px;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.pagination-info {
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 14px;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.pagination-controls button {
+  padding: 8px 12px;
+  min-width: 60px;
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

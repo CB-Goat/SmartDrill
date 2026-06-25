@@ -199,11 +199,20 @@ def get_difficulties(admin: User = Depends(get_current_admin), db: Session = Dep
     return db.query(Difficulty).all()
 
 @router.get("/questions")
-def get_questions(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+def get_questions(
+    unit_id: int = None,
+    page: int = 1,
+    page_size: int = 50,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
     query = db.query(Question)
     if unit_id:
         query = query.filter(Question.unit_id == unit_id)
-    questions = query.all()
+
+    total = query.count()
+    questions = query.order_by(Question.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
     result = []
     for q in questions:
         result.append({
@@ -220,7 +229,14 @@ def get_questions(unit_id: int = None, admin: User = Depends(get_current_admin),
             "knowledge_point_id": q.knowledge_point_id,
             "exam_point_id": q.exam_point_id
         })
-    return result
+
+    return {
+        "items": result,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
 
 @router.post("/questions")
 def save_question(data: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
