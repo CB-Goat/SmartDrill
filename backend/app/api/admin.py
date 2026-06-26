@@ -310,7 +310,7 @@ def _parse_array(text):
 
 
 def _sync_knowledge_points(db, unit_id, knowledge_data):
-    if not knowledge_data:
+    if not knowledge_data or not isinstance(knowledge_data, dict):
         return 0
     kp_sources = [
         ('核心概念', knowledge_data.get('core_concepts', [])),
@@ -320,7 +320,13 @@ def _sync_knowledge_points(db, unit_id, knowledge_data):
     ]
     all_points = []
     for category, items in kp_sources:
+        if not isinstance(items, list):
+            continue
         for item in items:
+            if not isinstance(item, str):
+                item = str(item) if item else ''
+            if not item:
+                continue
             title = f'[{category}] {item[:50]}'
             if len(item) > 50:
                 title += '...'
@@ -374,85 +380,105 @@ async def import_knowledge_8modules(
             errors = []
 
             for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
-                subject = row[0]
-                grade = row[1]
-                semester = row[2]
-                unit_num = row[3]
-                unit_name = row[5]
-                json_content = row[15] if len(row) > 15 else None
+                try:
+                    subject = row[0]
+                    grade = row[1]
+                    semester = row[2]
+                    unit_num = row[3]
+                    unit_name = row[5]
+                    json_content = row[15] if len(row) > 15 else None
 
-                if not subject or not unit_name:
-                    continue
+                    if not subject or not unit_name:
+                        continue
 
-                knowledge_data = None
-                if json_content:
-                    try:
-                        knowledge_data = json.loads(str(json_content))
-                    except Exception:
-                        pass
-
-                if not knowledge_data:
-                    unit_topic = row[6] if len(row) > 6 else ''
-                    unit_overview = row[7] if len(row) > 7 else ''
-                    knowledge_frame = row[8] if len(row) > 8 else ''
-                    core_text = row[9] if len(row) > 9 else ''
-                    key_text = row[10] if len(row) > 10 else ''
-                    diff_text = row[11] if len(row) > 11 else ''
-                    confuse_text = row[12] if len(row) > 12 else ''
-                    example_text = row[13] if len(row) > 13 else ''
-                    typical_example = {}
-                    if example_text:
+                    knowledge_data = None
+                    if json_content:
                         try:
-                            typical_example = json.loads(str(example_text))
+                            parsed = json.loads(str(json_content))
+                            if isinstance(parsed, dict):
+                                knowledge_data = parsed
                         except Exception:
-                            typical_example = {'stem': str(example_text)[:500]}
-                    knowledge_data = {
-                        'unit_topic': str(unit_topic or ''),
-                        'unit_overview': str(unit_overview or ''),
-                        'knowledge_frame': str(knowledge_frame or ''),
-                        'core_concepts': _parse_array(core_text),
-                        'key_knowledge': _parse_array(key_text),
-                        'difficult_analysis': _parse_array(diff_text),
-                        'confuse_distinction': _parse_array(confuse_text),
-                        'typical_example': typical_example
-                    }
+                            pass
 
-                unit = _find_unit(db, subject, grade, semester, unit_num)
+                    if not knowledge_data:
+                        unit_topic = row[6] if len(row) > 6 else ''
+                        unit_overview = row[7] if len(row) > 7 else ''
+                        knowledge_frame = row[8] if len(row) > 8 else ''
+                        core_text = row[9] if len(row) > 9 else ''
+                        key_text = row[10] if len(row) > 10 else ''
+                        diff_text = row[11] if len(row) > 11 else ''
+                        confuse_text = row[12] if len(row) > 12 else ''
+                        example_text = row[13] if len(row) > 13 else ''
+                        typical_example = {}
+                        if example_text:
+                            try:
+                                parsed_example = json.loads(str(example_text))
+                                if isinstance(parsed_example, dict):
+                                    typical_example = parsed_example
+                                else:
+                                    typical_example = {'stem': str(example_text)[:500]}
+                            except Exception:
+                                typical_example = {'stem': str(example_text)[:500]}
+                        knowledge_data = {
+                            'unit_topic': str(unit_topic or ''),
+                            'unit_overview': str(unit_overview or ''),
+                            'knowledge_frame': str(knowledge_frame or ''),
+                            'core_concepts': _parse_array(core_text),
+                            'key_knowledge': _parse_array(key_text),
+                            'difficult_analysis': _parse_array(diff_text),
+                            'confuse_distinction': _parse_array(confuse_text),
+                            'typical_example': typical_example
+                        }
 
-                status = "success"
-                msg = ""
-                if unit:
-                    matched += 1
-                    unit.unit_knowledge_json = knowledge_data
-                    kp_count = _sync_knowledge_points(db, unit.id, knowledge_data)
-                    total_kp += kp_count
-                    msg = f"✓ {subject}/{grade}/第{unit_num}单元 {unit_name}"
-                else:
-                    not_matched += 1
-                    status = "error"
-                    msg = f"✗ 未匹配: {subject}/{grade}/{semester}/第{unit_num}单元 {unit_name}"
-                    errors.append(msg)
+                    unit = _find_unit(db, subject, grade, semester, unit_num)
 
-                if idx % 5 == 0 or idx == total_rows:
-                    db.commit()
+                    status = "success"
+                    msg = ""
+                    if unit:
+                        matched += 1
+                        unit.unit_knowledge_json = knowledge_data
+                        try:
+                            kp_count = _sync_knowledge_points(db, unit.id, knowledge_data)
+                            total_kp += kp_count
+                        except Exception as kp_e:
+                            errors.append(f'第{idx}行知识点同步失败: {str(kp_e)}')
+                        msg = f"✓ {subject}/{grade}/第{unit_num}单元 {unit_name}"
+                    else:
+                        not_matched += 1
+                        status = "error"
+                        msg = f"✗ 未匹配: {subject}/{grade}/{semester}/第{unit_num}单元 {unit_name}"
+                        errors.append(msg)
+
+                    if idx % 5 == 0 or idx == total_rows:
+                        db.commit()
+                        yield {"event": "message", "data": json.dumps({
+                            "type": "progress",
+                            "current": idx,
+                            "total": total_rows,
+                            "status": status,
+                            "message": msg
+                        }, ensure_ascii=False)}
+                        await asyncio.sleep(0.02)
+                    elif idx % 1 == 0:
+                        yield {"event": "message", "data": json.dumps({
+                            "type": "progress",
+                            "current": idx,
+                            "total": total_rows,
+                            "status": status,
+                            "message": msg
+                        }, ensure_ascii=False)}
+                except Exception as row_e:
+                    db.rollback()
+                    err_msg = f"第{idx}行处理失败: {str(row_e)}"
+                    errors.append(err_msg)
                     yield {"event": "message", "data": json.dumps({
                         "type": "progress",
                         "current": idx,
                         "total": total_rows,
-                        "status": status,
-                        "message": msg
+                        "status": "error",
+                        "message": err_msg
                     }, ensure_ascii=False)}
-                    await asyncio.sleep(0.02)
-                elif idx % 1 == 0:
-                    yield {"event": "message", "data": json.dumps({
-                        "type": "progress",
-                        "current": idx,
-                        "total": total_rows,
-                        "status": status,
-                        "message": msg
-                    }, ensure_ascii=False)}
-
-            db.commit()
+                    await asyncio.sleep(0.01)
 
             yield {"event": "message", "data": json.dumps({
                 "type": "complete",
