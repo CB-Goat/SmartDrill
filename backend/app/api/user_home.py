@@ -473,37 +473,58 @@ def generate_paper_word_doc(unit, semester, subject, grade, questions):
     
     doc.add_paragraph()
     
-    for idx, q in enumerate(questions, 1):
+    questions_by_type = {}
+    for q in questions:
         q_type = q.get('question_type', '')
-        q_content = q.get('content', '')
-        q_options = q.get('options', [])
+        if q_type not in questions_by_type:
+            questions_by_type[q_type] = []
+        questions_by_type[q_type].append(q)
+    
+    roman_numerals = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+    
+    type_index = 0
+    for q_type, q_list in questions_by_type.items():
+        if type_index >= len(roman_numerals):
+            type_num = str(type_index + 1)
+        else:
+            type_num = roman_numerals[type_index]
         
-        p = doc.add_paragraph()
-        type_run = p.add_run(f"【{q_type}】")
-        type_run.font.bold = True
-        type_run.font.color.rgb = RGBColor(0, 102, 204)
-        type_run.font.name = '宋体'
-        type_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-        
-        num_run = p.add_run(f"  {idx}. ")
-        num_run.font.bold = True
-        num_run.font.name = '宋体'
-        num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-        
-        content_run = p.add_run(q_content)
-        content_run.font.name = '宋体'
-        content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-        
-        if q_options and isinstance(q_options, list):
-            for opt_idx, opt in enumerate(q_options):
-                opt_letter = chr(65 + opt_idx)
-                opt_p = doc.add_paragraph()
-                opt_p.paragraph_format.left_indent = Pt(36)
-                opt_run = opt_p.add_run(f"{opt_letter}. {opt}")
-                opt_run.font.name = '宋体'
-                opt_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        section_title = doc.add_paragraph()
+        section_run = section_title.add_run(f"{type_num}、{q_type}（共{len(q_list)}题）")
+        section_run.font.size = Pt(14)
+        section_run.font.bold = True
+        section_run.font.name = '宋体'
+        section_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        section_run.font.color.rgb = RGBColor(0, 102, 204)
         
         doc.add_paragraph()
+        
+        for idx, q in enumerate(q_list, 1):
+            q_content = q.get('content', '')
+            q_options = q.get('options', [])
+            
+            p = doc.add_paragraph()
+            num_run = p.add_run(f"{idx}. ")
+            num_run.font.bold = True
+            num_run.font.name = '宋体'
+            num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            content_run = p.add_run(q_content)
+            content_run.font.name = '宋体'
+            content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            if q_options and isinstance(q_options, list):
+                for opt_idx, opt in enumerate(q_options):
+                    opt_letter = chr(65 + opt_idx)
+                    opt_p = doc.add_paragraph()
+                    opt_p.paragraph_format.left_indent = Pt(36)
+                    opt_run = opt_p.add_run(f"{opt_letter}. {opt}")
+                    opt_run.font.name = '宋体'
+                    opt_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            doc.add_paragraph()
+        
+        type_index += 1
     
     doc.add_page_break()
     
@@ -517,40 +538,59 @@ def generate_paper_word_doc(unit, semester, subject, grade, questions):
     
     doc.add_paragraph()
     
-    for idx, q in enumerate(questions, 1):
-        q_answer = q.get('answer', '')
-        q_analysis = q.get('analysis', '')
+    type_index = 0
+    for q_type, q_list in questions_by_type.items():
+        if type_index >= len(roman_numerals):
+            type_num = str(type_index + 1)
+        else:
+            type_num = roman_numerals[type_index]
         
-        ans_p = doc.add_paragraph()
-        ans_num_run = ans_p.add_run(f"{idx}. ")
-        ans_num_run.font.bold = True
-        ans_num_run.font.name = '宋体'
-        ans_num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-        
-        ans_label_run = ans_p.add_run("答案：")
-        ans_label_run.font.bold = True
-        ans_label_run.font.color.rgb = RGBColor(220, 20, 60)
-        ans_label_run.font.name = '宋体'
-        ans_label_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-        
-        ans_content_run = ans_p.add_run(q_answer)
-        ans_content_run.font.name = '宋体'
-        ans_content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-        
-        if q_analysis:
-            analysis_p = doc.add_paragraph()
-            analysis_p.paragraph_format.left_indent = Pt(24)
-            analysis_label_run = analysis_p.add_run("解析：")
-            analysis_label_run.font.bold = True
-            analysis_label_run.font.color.rgb = RGBColor(0, 139, 69)
-            analysis_label_run.font.name = '宋体'
-            analysis_label_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-            
-            analysis_content_run = analysis_p.add_run(q_analysis)
-            analysis_content_run.font.name = '宋体'
-            analysis_content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        section_title = doc.add_paragraph()
+        section_run = section_title.add_run(f"{type_num}、{q_type}")
+        section_run.font.size = Pt(14)
+        section_run.font.bold = True
+        section_run.font.name = '宋体'
+        section_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        section_run.font.color.rgb = RGBColor(0, 102, 204)
         
         doc.add_paragraph()
+        
+        for idx, q in enumerate(q_list, 1):
+            q_answer = q.get('answer', '')
+            q_analysis = q.get('analysis', '')
+            
+            ans_p = doc.add_paragraph()
+            ans_num_run = ans_p.add_run(f"{idx}. ")
+            ans_num_run.font.bold = True
+            ans_num_run.font.name = '宋体'
+            ans_num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            ans_label_run = ans_p.add_run("答案：")
+            ans_label_run.font.bold = True
+            ans_label_run.font.color.rgb = RGBColor(220, 20, 60)
+            ans_label_run.font.name = '宋体'
+            ans_label_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            ans_content_run = ans_p.add_run(q_answer)
+            ans_content_run.font.name = '宋体'
+            ans_content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            if q_analysis:
+                analysis_p = doc.add_paragraph()
+                analysis_p.paragraph_format.left_indent = Pt(24)
+                analysis_label_run = analysis_p.add_run("解析：")
+                analysis_label_run.font.bold = True
+                analysis_label_run.font.color.rgb = RGBColor(0, 139, 69)
+                analysis_label_run.font.name = '宋体'
+                analysis_label_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                
+                analysis_content_run = analysis_p.add_run(q_analysis)
+                analysis_content_run.font.name = '宋体'
+                analysis_content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            doc.add_paragraph()
+        
+        type_index += 1
     
     return doc
 
@@ -558,9 +598,9 @@ def generate_paper_word_doc(unit, semester, subject, grade, questions):
 def get_paper_word(
     unit_id: int,
     question_count: int = 10,
-    difficulty_id: int = None,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    **kwargs
 ):
     unit = db.query(Unit).filter(Unit.id == unit_id).first()
     if not unit:
@@ -570,40 +610,98 @@ def get_paper_word(
     subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
     grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
     
-    query = db.query(Question).filter(Question.unit_id == unit_id)
-    if difficulty_id:
-        query = query.filter(Question.difficulty_id == difficulty_id)
+    difficulty_counts = {}
+    question_type_counts = {}
     
-    questions = query.all()
-    
-    if not questions:
-        raise HTTPException(status_code=400, detail="该单元暂无题目")
-    
-    if question_count > len(questions):
-        question_count = len(questions)
-    
-    selected = random.sample(questions, question_count)
-    
-    paper_questions = []
-    for q in selected:
-        options_list = []
-        if q.options:
+    for key, value in kwargs.items():
+        if key.startswith('difficulty_'):
             try:
-                import json
-                options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+                diff_id = int(key.split('_')[1])
+                difficulty_counts[diff_id] = int(value)
             except:
-                options_list = []
-        
-        paper_questions.append({
-            "content": q.content,
-            "options": options_list,
-            "answer": q.answer,
-            "analysis": q.analysis,
-            "question_type": q.question_type_obj.name if q.question_type_obj else "",
-            "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
-        })
+                pass
+        elif key.startswith('type_'):
+            try:
+                type_id = int(key.split('_')[1])
+                question_type_counts[type_id] = int(value)
+            except:
+                pass
     
-    doc = generate_paper_word_doc(unit, semester, subject, grade, paper_questions)
+    all_selected = []
+    
+    if question_type_counts:
+        for type_id, count in question_type_counts.items():
+            if count <= 0:
+                continue
+            
+            query = db.query(Question).filter(
+                Question.unit_id == unit_id,
+                Question.question_type_id == type_id
+            )
+            
+            if difficulty_counts:
+                query = query.filter(Question.difficulty_id.in_(difficulty_counts.keys()))
+            
+            questions = query.all()
+            
+            if not questions:
+                continue
+            
+            selected_count = min(count, len(questions))
+            selected = random.sample(questions, selected_count)
+            
+            for q in selected:
+                options_list = []
+                if q.options:
+                    try:
+                        import json
+                        options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+                    except:
+                        options_list = []
+                
+                all_selected.append({
+                    "content": q.content,
+                    "options": options_list,
+                    "answer": q.answer,
+                    "analysis": q.analysis,
+                    "question_type": q.question_type_obj.name if q.question_type_obj else "",
+                    "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
+                    "question_type_id": q.question_type_id,
+                })
+    else:
+        query = db.query(Question).filter(Question.unit_id == unit_id)
+        
+        if difficulty_counts:
+            query = query.filter(Question.difficulty_id.in_(difficulty_counts.keys()))
+        
+        questions = query.all()
+        
+        if not questions:
+            raise HTTPException(status_code=400, detail="该单元暂无符合条件的题目")
+        
+        selected_count = min(question_count, len(questions))
+        selected = random.sample(questions, selected_count)
+        
+        for q in selected:
+            options_list = []
+            if q.options:
+                try:
+                    import json
+                    options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+                except:
+                    options_list = []
+            
+            all_selected.append({
+                "content": q.content,
+                "options": options_list,
+                "answer": q.answer,
+                "analysis": q.analysis,
+                "question_type": q.question_type_obj.name if q.question_type_obj else "",
+                "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
+                "question_type_id": q.question_type_id,
+            })
+    
+    doc = generate_paper_word_doc(unit, semester, subject, grade, all_selected)
     
     title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} 单元测试卷"
     buffer = BytesIO()

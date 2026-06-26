@@ -126,30 +126,41 @@
         </div>
         <div class="modal-body paper-config-body">
           <div class="config-item">
-            <label>题目数量</label>
+            <label>试卷总题数：{{ totalSelectedCount }} / {{ paperQuestionCount }}</label>
             <div class="qty-selector">
-              <button class="qty-btn" @click="paperQuestionCount > 1 && paperQuestionCount--">-</button>
-              <input type="number" v-model.number="paperQuestionCount" min="1" :max="maxQuestionCount" />
-              <button class="qty-btn" @click="paperQuestionCount < maxQuestionCount && paperQuestionCount++">+</button>
+              <button class="qty-btn" @click="paperQuestionCount > 1 && adjustTotalQuestionCount(paperQuestionCount - 1)">-</button>
+              <input type="number" :value="paperQuestionCount" @change="handleTotalQuestionCountChange" :max="maxQuestionCount" />
+              <button class="qty-btn" @click="paperQuestionCount < maxQuestionCount && adjustTotalQuestionCount(paperQuestionCount + 1)">+</button>
             </div>
-            <span class="config-hint">共 {{ maxQuestionCount }} 道题</span>
+            <span class="config-hint">该单元共 {{ maxQuestionCount }} 道题</span>
           </div>
+          
           <div class="config-item">
-            <label>难度选择</label>
-            <div class="difficulty-options">
-              <div 
-                :class="['diff-option', { active: paperDifficultyId === null }]"
-                @click="paperDifficultyId = null"
-              >
-                全部
+            <label>难度分配（共 {{ totalDifficultyCount }} 题）</label>
+            <div class="distribution-list">
+              <div v-for="d in difficultyList" :key="d.id" class="distribution-item">
+                <span class="dist-name">{{ d.name }}</span>
+                <span class="dist-total">（{{ d.count }}题）</span>
+                <div class="qty-selector">
+                  <button class="qty-btn" @click="adjustDifficultyCount(d.id, -1)">-</button>
+                  <input type="number" :value="getDifficultyCount(d.id)" @change="(e) => setDifficultyCount(d.id, Number((e.target as HTMLInputElement).value))" :max="d.count" />
+                  <button class="qty-btn" @click="adjustDifficultyCount(d.id, 1)">+</button>
+                </div>
               </div>
-              <div 
-                v-for="d in difficultyList" 
-                :key="d.id"
-                :class="['diff-option', { active: paperDifficultyId === d.id }]"
-                @click="d.count > 0 && (paperDifficultyId = d.id)"
-              >
-                {{ d.name }} ({{ d.count }})
+            </div>
+          </div>
+          
+          <div class="config-item">
+            <label>题型分配（共 {{ totalQuestionTypeCount }} 题）</label>
+            <div class="distribution-list">
+              <div v-for="t in questionTypeList" :key="t.id" class="distribution-item">
+                <span class="dist-name">{{ t.name }}</span>
+                <span class="dist-total">（{{ t.count }}题）</span>
+                <div class="qty-selector">
+                  <button class="qty-btn" @click="adjustQuestionTypeCount(t.id, -1)">-</button>
+                  <input type="number" :value="getQuestionTypeCount(t.id)" @change="(e) => setQuestionTypeCount(t.id, Number((e.target as HTMLInputElement).value))" :max="t.count" />
+                  <button class="qty-btn" @click="adjustQuestionTypeCount(t.id, 1)">+</button>
+                </div>
               </div>
             </div>
           </div>
@@ -209,12 +220,27 @@ const paperConfigVisible = ref(false)
 const paperPreviewVisible = ref(false)
 const currentPaperUnit = ref<any>(null)
 const paperQuestionCount = ref(10)
-const paperDifficultyId = ref<number | null>(null)
 const difficultyList = ref<any[]>([])
+const questionTypeList = ref<any[]>([])
 const maxQuestionCount = ref(0)
 const generatingPaper = ref(false)
 const paperPreviewContainer = ref<HTMLElement | null>(null)
 const paperData = ref<any>(null)
+
+const difficultyCounts = ref<Record<number, number>>({})
+const questionTypeCounts = ref<Record<number, number>>({})
+
+const totalDifficultyCount = computed(() => {
+  return Object.values(difficultyCounts.value).reduce((sum, count) => sum + count, 0)
+})
+
+const totalQuestionTypeCount = computed(() => {
+  return Object.values(questionTypeCounts.value).reduce((sum, count) => sum + count, 0)
+})
+
+const totalSelectedCount = computed(() => {
+  return Math.max(totalDifficultyCount.value, totalQuestionTypeCount.value)
+})
 
 const currentSubject = computed(() => subjects.value[activeSubject.value] || null)
 
@@ -233,8 +259,9 @@ async function handleUnitClick(unit: any) {
 async function openPaperConfig(unit: any) {
   try {
     currentPaperUnit.value = unit
-    paperDifficultyId.value = null
     paperQuestionCount.value = 10
+    difficultyCounts.value = {}
+    questionTypeCounts.value = {}
     
     const response = await fetch(`/api/user/unit-question-stats/${unit.id}`, {
       headers: { 'Authorization': 'Bearer ' + userStore.token }
@@ -242,11 +269,14 @@ async function openPaperConfig(unit: any) {
     const result = await response.json()
     
     maxQuestionCount.value = result.total || 0
-    difficultyList.value = result.difficulty_stats || []
+    difficultyList.value = (result.difficulty_stats || []).filter((d: any) => d.count > 0)
+    questionTypeList.value = (result.type_stats || []).filter((t: any) => t.count > 0)
     
     if (maxQuestionCount.value > 0 && paperQuestionCount.value > maxQuestionCount.value) {
       paperQuestionCount.value = maxQuestionCount.value
     }
+    
+    autoDistributeCounts()
     
     paperConfigVisible.value = true
   } catch (error) {
@@ -254,16 +284,109 @@ async function openPaperConfig(unit: any) {
   }
 }
 
+function autoDistributeCounts() {
+  difficultyCounts.value = {}
+  questionTypeCounts.value = {}
+  
+  const count = paperQuestionCount.value
+  
+  if (difficultyList.value.length > 0) {
+    const avg = Math.floor(count / difficultyList.value.length)
+    const remainder = count % difficultyList.value.length
+    
+    difficultyList.value.forEach((d, index) => {
+      const maxAllowed = Math.min(d.count, index < remainder ? avg + 1 : avg)
+      difficultyCounts.value[d.id] = maxAllowed > 0 ? maxAllowed : 0
+    })
+  }
+  
+  if (questionTypeList.value.length > 0) {
+    const avg = Math.floor(count / questionTypeList.value.length)
+    const remainder = count % questionTypeList.value.length
+    
+    questionTypeList.value.forEach((t, index) => {
+      const maxAllowed = Math.min(t.count, index < remainder ? avg + 1 : avg)
+      questionTypeCounts.value[t.id] = maxAllowed > 0 ? maxAllowed : 0
+    })
+  }
+}
+
+function adjustTotalQuestionCount(newCount: number) {
+  paperQuestionCount.value = Math.max(1, Math.min(newCount, maxQuestionCount.value))
+  autoDistributeCounts()
+}
+
+function handleTotalQuestionCountChange(event: any) {
+  const newCount = Math.max(1, Math.min(Number(event.target.value) || 1, maxQuestionCount.value))
+  paperQuestionCount.value = newCount
+  autoDistributeCounts()
+}
+
+function getDifficultyCount(id: number) {
+  return difficultyCounts.value[id] || 0
+}
+
+function setDifficultyCount(id: number, count: number) {
+  const diff = difficultyList.value.find(d => d.id === id)
+  const maxAllowed = diff ? diff.count : 0
+  const adjusted = Math.max(0, Math.min(count, maxAllowed))
+  difficultyCounts.value[id] = adjusted
+}
+
+function adjustDifficultyCount(id: number, delta: number) {
+  const current = difficultyCounts.value[id] || 0
+  const diff = difficultyList.value.find(d => d.id === id)
+  const maxAllowed = diff ? diff.count : 0
+  const newCount = Math.max(0, Math.min(current + delta, maxAllowed))
+  difficultyCounts.value[id] = newCount
+}
+
+function getQuestionTypeCount(id: number) {
+  return questionTypeCounts.value[id] || 0
+}
+
+function setQuestionTypeCount(id: number, count: number) {
+  const qt = questionTypeList.value.find(t => t.id === id)
+  const maxAllowed = qt ? qt.count : 0
+  const adjusted = Math.max(0, Math.min(count, maxAllowed))
+  questionTypeCounts.value[id] = adjusted
+}
+
+function adjustQuestionTypeCount(id: number, delta: number) {
+  const current = questionTypeCounts.value[id] || 0
+  const qt = questionTypeList.value.find(t => t.id === id)
+  const maxAllowed = qt ? qt.count : 0
+  const newCount = Math.max(0, Math.min(current + delta, maxAllowed))
+  questionTypeCounts.value[id] = newCount
+}
+
 async function generatePaperPreview() {
   if (!currentPaperUnit.value) return
+  
+  if (totalSelectedCount.value !== paperQuestionCount.value) {
+    showToast('难度和题型分配的题数总和必须等于试卷总题数')
+    return
+  }
   
   try {
     generatingPaper.value = true
     
-    let url = `/api/user/paper-word/${currentPaperUnit.value.id}?question_count=${paperQuestionCount.value}`
-    if (paperDifficultyId.value) {
-      url += `&difficulty_id=${paperDifficultyId.value}`
-    }
+    const params = new URLSearchParams()
+    params.append('question_count', paperQuestionCount.value.toString())
+    
+    Object.entries(difficultyCounts.value).forEach(([id, count]) => {
+      if (count > 0) {
+        params.append(`difficulty_${id}`, count.toString())
+      }
+    })
+    
+    Object.entries(questionTypeCounts.value).forEach(([id, count]) => {
+      if (count > 0) {
+        params.append(`type_${id}`, count.toString())
+      }
+    })
+    
+    const url = `/api/user/paper-word/${currentPaperUnit.value.id}?${params.toString()}`
     
     const response = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + userStore.token }
@@ -280,7 +403,8 @@ async function generatePaperPreview() {
       unit_id: currentPaperUnit.value.id,
       unit_name: currentPaperUnit.value.name,
       question_count: paperQuestionCount.value,
-      difficulty_id: paperDifficultyId.value
+      difficulty_counts: { ...difficultyCounts.value },
+      question_type_counts: { ...questionTypeCounts.value }
     }
     
     paperConfigVisible.value = false
@@ -328,7 +452,8 @@ async function downloadPaper() {
       },
       body: JSON.stringify({
         question_count: paperData.value.question_count,
-        difficulty_id: paperData.value.difficulty_id
+        difficulty_counts: paperData.value.difficulty_counts,
+        question_type_counts: paperData.value.question_type_counts
       })
     })
     
@@ -342,10 +467,22 @@ async function downloadPaper() {
     userStore.userInfo.points = result.points
     showToast('下载成功，已扣20积分')
     
-    let url = `/api/user/paper-word/${paperData.value.unit_id}?question_count=${paperData.value.question_count}`
-    if (paperData.value.difficulty_id) {
-      url += `&difficulty_id=${paperData.value.difficulty_id}`
-    }
+    const params = new URLSearchParams()
+    params.append('question_count', paperData.value.question_count.toString())
+    
+    Object.entries(paperData.value.difficulty_counts || {}).forEach(([id, count]) => {
+      if (count > 0) {
+        params.append(`difficulty_${id}`, count.toString())
+      }
+    })
+    
+    Object.entries(paperData.value.question_type_counts || {}).forEach(([id, count]) => {
+      if (count > 0) {
+        params.append(`type_${id}`, count.toString())
+      }
+    })
+    
+    const url = `/api/user/paper-word/${paperData.value.unit_id}?${params.toString()}`
     
     const wordResponse = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + userStore.token }
@@ -929,30 +1066,30 @@ async function downloadUnit() {
   color: #999;
 }
 
-.difficulty-options {
+.distribution-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.diff-option {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+.distribution-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dist-name {
   font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: #fff;
+  color: #333;
+  min-width: 60px;
 }
 
-.diff-option:hover {
-  border-color: #4facfe;
-  color: #4facfe;
+.dist-total {
+  font-size: 12px;
+  color: #999;
 }
 
-.diff-option.active {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  color: #fff;
-  border-color: transparent;
+.distribution-item .qty-selector {
+  margin-left: auto;
 }
 </style>
