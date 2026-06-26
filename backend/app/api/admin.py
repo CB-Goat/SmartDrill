@@ -340,6 +340,9 @@ async def import_knowledge_8modules(
     admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
+    file_content = await file.read()
+    file_name = file.filename or ''
+
     async def event_generator():
         try:
             _ensure_knowledge_column()
@@ -348,12 +351,11 @@ async def import_knowledge_8modules(
                 "current": 0,
                 "total": 0,
                 "status": "info",
-                "message": "读取Excel文件..."
+                "message": f"读取Excel文件 {file_name}..."
             }, ensure_ascii=False)}
             await asyncio.sleep(0.1)
 
-            content = await file.read()
-            wb = openpyxl.load_workbook(io.BytesIO(content))
+            wb = openpyxl.load_workbook(io.BytesIO(file_content))
             ws = wb.active
             total_rows = ws.max_row - 1
 
