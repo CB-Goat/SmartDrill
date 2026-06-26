@@ -5,21 +5,23 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, Base
 from app.models.models import Difficulty, Question
 
-STANDARD_DIFFICULTIES = ["简单", "中等", "困难"]
+STANDARD_DIFFICULTIES = ["简单", "普通", "困难"]
 
 DIFFICULTY_MAPPING = {
     "easy": "简单",
-    "normal": "中等",
+    "normal": "普通",
+    "medium": "普通",
     "hard": "困难",
-    "普通": "简单",
-    "一般": "简单",
+    "中等": "普通",
+    "一般": "普通",
     "基础": "简单",
     "较易": "简单",
+    "简单": "简单",
+    "普通": "普通",
     "困难": "困难",
     "较难": "困难",
     "复杂": "困难",
-    "中等": "中等",
-    "适中": "中等",
+    "适中": "普通",
 }
 
 def clean_difficulties():

@@ -62,7 +62,7 @@ def init_db():
             db.commit()
         
         if not db.query(Difficulty).first():
-            difficulties = ["简单", "中等", "困难"]
+            difficulties = ["简单", "普通", "困难"]
             for d in difficulties:
                 db.add(Difficulty(name=d))
             db.commit()
