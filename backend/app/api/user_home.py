@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import User, Grade, Subject, Semester, Unit, KnowledgePoint, ExamPoint, Order
+from app.models.models import User, Grade, Subject, Semester, Unit, KnowledgePoint, ExamPoint, Order, Question, QuestionType, Difficulty
 from app.utils.auth import get_current_user
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
@@ -11,6 +11,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from io import BytesIO
 from urllib.parse import quote
+import random
 
 from app.api.knowledge_import import generate_unit_word_doc
 
@@ -177,6 +178,7 @@ def get_home_data(
             has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
             has_8modules = unit.unit_knowledge_json is not None and isinstance(unit.unit_knowledge_json, dict) and bool(unit.unit_knowledge_json)
             has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
+            question_count = db.query(Question).filter(Question.unit_id == unit.id).count()
             review_downloaded = db.query(Order).filter(
                 Order.user_id == user.id,
                 Order.order_type == 'knowledge',
@@ -195,6 +197,7 @@ def get_home_data(
                 "has_knowledge": has_knowledge,
                 "has_8modules": has_8modules,
                 "has_exam": has_exam,
+                "question_count": question_count,
                 "review_downloaded": review_downloaded,
                 "practice_downloaded": practice_downloaded
             })
@@ -255,6 +258,44 @@ def get_unit_word(
         headers={"Content-Disposition": f"attachment; filename=\"{encoded_filename}\""}
     )
 
+@router.post("/download-paper/{unit_id}")
+def download_paper(
+    unit_id: int,
+    data: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    POINTS_COST = 20
+    
+    if user.points < POINTS_COST:
+        raise HTTPException(status_code=400, detail="积分不足")
+    
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    
+    question_count = data.get('question_count', 10)
+    difficulty_id = data.get('difficulty_id')
+    
+    user.points -= POINTS_COST
+    
+    semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
+    subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
+    grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
+    
+    title = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} - 单元测试卷"
+    
+    order = Order(
+        user_id=user.id,
+        title=title,
+        order_type="practice",
+        points=POINTS_COST
+    )
+    db.add(order)
+    db.commit()
+    
+    return {"message": "下载成功", "points": user.points}
+
 @router.post("/download-unit/{unit_id}")
 def download_unit(
     unit_id: int,
@@ -309,3 +350,271 @@ def set_child_grade(
     db.commit()
     
     return {"message": "设置成功", "grade_name": grade.name}
+
+@router.get("/unit-question-stats/{unit_id}")
+def get_unit_question_stats(
+    unit_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    
+    total = db.query(Question).filter(Question.unit_id == unit_id).count()
+    
+    difficulties = db.query(Difficulty).all()
+    difficulty_stats = []
+    for d in difficulties:
+        count = db.query(Question).filter(
+            Question.unit_id == unit_id,
+            Question.difficulty_id == d.id
+        ).count()
+        difficulty_stats.append({
+            "id": d.id,
+            "name": d.name,
+            "count": count
+        })
+    
+    question_types = db.query(QuestionType).all()
+    type_stats = []
+    for t in question_types:
+        count = db.query(Question).filter(
+            Question.unit_id == unit_id,
+            Question.question_type_id == t.id
+        ).count()
+        type_stats.append({
+            "id": t.id,
+            "name": t.name,
+            "count": count
+        })
+    
+    return {
+        "unit_id": unit_id,
+        "unit_name": unit.name,
+        "total": total,
+        "difficulty_stats": difficulty_stats,
+        "type_stats": type_stats
+    }
+
+@router.get("/generate-paper/{unit_id}")
+def generate_paper(
+    unit_id: int,
+    question_count: int = 10,
+    difficulty_id: int = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    
+    query = db.query(Question).filter(Question.unit_id == unit_id)
+    if difficulty_id:
+        query = query.filter(Question.difficulty_id == difficulty_id)
+    
+    questions = query.all()
+    
+    if not questions:
+        raise HTTPException(status_code=400, detail="该单元暂无题目")
+    
+    if question_count > len(questions):
+        question_count = len(questions)
+    
+    selected = random.sample(questions, question_count)
+    
+    result = []
+    for idx, q in enumerate(selected, 1):
+        options_list = []
+        if q.options:
+            try:
+                import json
+                options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+            except:
+                options_list = []
+        
+        result.append({
+            "number": idx,
+            "id": q.id,
+            "content": q.content,
+            "options": options_list,
+            "answer": q.answer,
+            "analysis": q.analysis,
+            "question_type": q.question_type_obj.name if q.question_type_obj else "",
+            "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
+            "question_json": q.question_json,
+            "stem": q.stem
+        })
+    
+    return {
+        "unit_id": unit_id,
+        "unit_name": unit.name,
+        "total": len(result),
+        "questions": result
+    }
+
+def generate_paper_word_doc(unit, semester, subject, grade, questions):
+    doc = Document()
+    
+    style = doc.styles['Normal']
+    style.font.name = '宋体'
+    style.font.size = Pt(12)
+    style._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    
+    title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} 单元测试卷"
+    
+    title = doc.add_paragraph()
+    title_run = title.add_run(title_text)
+    title_run.font.size = Pt(18)
+    title_run.font.bold = True
+    title_run.font.name = '宋体'
+    title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    doc.add_paragraph()
+    
+    for idx, q in enumerate(questions, 1):
+        q_type = q.get('question_type', '')
+        q_content = q.get('content', '')
+        q_options = q.get('options', [])
+        
+        p = doc.add_paragraph()
+        type_run = p.add_run(f"【{q_type}】")
+        type_run.font.bold = True
+        type_run.font.color.rgb = RGBColor(0, 102, 204)
+        type_run.font.name = '宋体'
+        type_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        num_run = p.add_run(f"  {idx}. ")
+        num_run.font.bold = True
+        num_run.font.name = '宋体'
+        num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        content_run = p.add_run(q_content)
+        content_run.font.name = '宋体'
+        content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        if q_options and isinstance(q_options, list):
+            for opt_idx, opt in enumerate(q_options):
+                opt_letter = chr(65 + opt_idx)
+                opt_p = doc.add_paragraph()
+                opt_p.paragraph_format.left_indent = Pt(36)
+                opt_run = opt_p.add_run(f"{opt_letter}. {opt}")
+                opt_run.font.name = '宋体'
+                opt_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        doc.add_paragraph()
+    
+    doc.add_page_break()
+    
+    answer_title = doc.add_paragraph()
+    answer_run = answer_title.add_run("参考答案及解析")
+    answer_run.font.size = Pt(16)
+    answer_run.font.bold = True
+    answer_run.font.name = '宋体'
+    answer_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    answer_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    doc.add_paragraph()
+    
+    for idx, q in enumerate(questions, 1):
+        q_answer = q.get('answer', '')
+        q_analysis = q.get('analysis', '')
+        
+        ans_p = doc.add_paragraph()
+        ans_num_run = ans_p.add_run(f"{idx}. ")
+        ans_num_run.font.bold = True
+        ans_num_run.font.name = '宋体'
+        ans_num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        ans_label_run = ans_p.add_run("答案：")
+        ans_label_run.font.bold = True
+        ans_label_run.font.color.rgb = RGBColor(220, 20, 60)
+        ans_label_run.font.name = '宋体'
+        ans_label_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        ans_content_run = ans_p.add_run(q_answer)
+        ans_content_run.font.name = '宋体'
+        ans_content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        if q_analysis:
+            analysis_p = doc.add_paragraph()
+            analysis_p.paragraph_format.left_indent = Pt(24)
+            analysis_label_run = analysis_p.add_run("解析：")
+            analysis_label_run.font.bold = True
+            analysis_label_run.font.color.rgb = RGBColor(0, 139, 69)
+            analysis_label_run.font.name = '宋体'
+            analysis_label_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            
+            analysis_content_run = analysis_p.add_run(q_analysis)
+            analysis_content_run.font.name = '宋体'
+            analysis_content_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        
+        doc.add_paragraph()
+    
+    return doc
+
+@router.get("/paper-word/{unit_id}")
+def get_paper_word(
+    unit_id: int,
+    question_count: int = 10,
+    difficulty_id: int = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    
+    semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
+    subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
+    grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
+    
+    query = db.query(Question).filter(Question.unit_id == unit_id)
+    if difficulty_id:
+        query = query.filter(Question.difficulty_id == difficulty_id)
+    
+    questions = query.all()
+    
+    if not questions:
+        raise HTTPException(status_code=400, detail="该单元暂无题目")
+    
+    if question_count > len(questions):
+        question_count = len(questions)
+    
+    selected = random.sample(questions, question_count)
+    
+    paper_questions = []
+    for q in selected:
+        options_list = []
+        if q.options:
+            try:
+                import json
+                options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+            except:
+                options_list = []
+        
+        paper_questions.append({
+            "content": q.content,
+            "options": options_list,
+            "answer": q.answer,
+            "analysis": q.analysis,
+            "question_type": q.question_type_obj.name if q.question_type_obj else "",
+            "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
+        })
+    
+    doc = generate_paper_word_doc(unit, semester, subject, grade, paper_questions)
+    
+    title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} 单元测试卷"
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    
+    filename = f"{title_text}.docx"
+    encoded_filename = quote(filename)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename=\"{encoded_filename}\""}
+    )

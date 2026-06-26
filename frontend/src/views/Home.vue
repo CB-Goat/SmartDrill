@@ -53,9 +53,10 @@
                 v-for="unit in currentSubject.units" 
                 :key="unit.id" 
                 :class="['unit-link', { 'unit-downloaded': isDownloaded(unit) }]"
-                @click="!isDownloaded(unit) && previewUnit(unit)"
+                @click="handleUnitClick(unit)"
               >
                 {{ unit.name }}
+                <span v-if="activeType === 'practice' && unit.question_count" class="unit-qcount">{{ unit.question_count }}题</span>
               </span>
             </div>
             <div v-else class="empty-text">暂无资料</div>
@@ -118,6 +119,60 @@
       </div>
     </div>
     
+    <div v-if="paperConfigVisible" class="modal-overlay" @click="paperConfigVisible = false">
+      <div class="modal-content paper-config-modal" @click.stop>
+        <div class="modal-header">
+          <span class="modal-title">{{ currentPaperUnit?.name }} - 试卷配置</span>
+        </div>
+        <div class="modal-body paper-config-body">
+          <div class="config-item">
+            <label>题目数量</label>
+            <div class="qty-selector">
+              <button class="qty-btn" @click="paperQuestionCount > 1 && paperQuestionCount--">-</button>
+              <input type="number" v-model.number="paperQuestionCount" min="1" :max="maxQuestionCount" />
+              <button class="qty-btn" @click="paperQuestionCount < maxQuestionCount && paperQuestionCount++">+</button>
+            </div>
+            <span class="config-hint">共 {{ maxQuestionCount }} 道题</span>
+          </div>
+          <div class="config-item">
+            <label>难度选择</label>
+            <div class="difficulty-options">
+              <div 
+                :class="['diff-option', { active: paperDifficultyId === null }]"
+                @click="paperDifficultyId = null"
+              >
+                全部
+              </div>
+              <div 
+                v-for="d in difficultyList" 
+                :key="d.id"
+                :class="['diff-option', { active: paperDifficultyId === d.id }]"
+                @click="d.count > 0 && (paperDifficultyId = d.id)"
+              >
+                {{ d.name }} ({{ d.count }})
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-close" @click="paperConfigVisible = false">取消</button>
+          <button class="btn-primary" @click="generatePaperPreview" :disabled="generatingPaper">
+            {{ generatingPaper ? '生成中...' : '生成试卷' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <div v-if="paperPreviewVisible" class="modal-overlay" @click="paperPreviewVisible = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-body" ref="paperPreviewContainer"></div>
+        <div class="modal-footer">
+          <button class="btn-close" @click="paperPreviewVisible = false">关闭（×）</button>
+          <button class="btn-primary" @click="downloadPaper">下载试卷（20积分）</button>
+        </div>
+      </div>
+    </div>
+    
     <van-tabbar v-model="activeTabbar" active-color="#ff6b6b" inactive-color="#999">
       <van-tabbar-item icon="home-o" to="/">首页</van-tabbar-item>
       <van-tabbar-item icon="description" to="/orders">订单</van-tabbar-item>
@@ -150,10 +205,163 @@ const previewVisible = ref(false)
 const previewUnitData = ref<any>(null)
 const previewContainer = ref<HTMLElement | null>(null)
 
+const paperConfigVisible = ref(false)
+const paperPreviewVisible = ref(false)
+const currentPaperUnit = ref<any>(null)
+const paperQuestionCount = ref(10)
+const paperDifficultyId = ref<number | null>(null)
+const difficultyList = ref<any[]>([])
+const maxQuestionCount = ref(0)
+const generatingPaper = ref(false)
+const paperPreviewContainer = ref<HTMLElement | null>(null)
+const paperData = ref<any>(null)
+
 const currentSubject = computed(() => subjects.value[activeSubject.value] || null)
 
 function isDownloaded(unit: any) {
   return activeType.value === 'review' ? unit.review_downloaded : unit.practice_downloaded
+}
+
+async function handleUnitClick(unit: any) {
+  if (activeType.value === 'review') {
+    await previewUnit(unit)
+  } else {
+    await openPaperConfig(unit)
+  }
+}
+
+async function openPaperConfig(unit: any) {
+  try {
+    currentPaperUnit.value = unit
+    paperDifficultyId.value = null
+    paperQuestionCount.value = 10
+    
+    const response = await fetch(`/api/user/unit-question-stats/${unit.id}`, {
+      headers: { 'Authorization': 'Bearer ' + userStore.token }
+    })
+    const result = await response.json()
+    
+    maxQuestionCount.value = result.total || 0
+    difficultyList.value = result.difficulty_stats || []
+    
+    if (maxQuestionCount.value > 0 && paperQuestionCount.value > maxQuestionCount.value) {
+      paperQuestionCount.value = maxQuestionCount.value
+    }
+    
+    paperConfigVisible.value = true
+  } catch (error) {
+    showToast('获取题库信息失败')
+  }
+}
+
+async function generatePaperPreview() {
+  if (!currentPaperUnit.value) return
+  
+  try {
+    generatingPaper.value = true
+    
+    let url = `/api/user/paper-word/${currentPaperUnit.value.id}?question_count=${paperQuestionCount.value}`
+    if (paperDifficultyId.value) {
+      url += `&difficulty_id=${paperDifficultyId.value}`
+    }
+    
+    const response = await fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + userStore.token }
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || '生成试卷失败')
+    }
+    
+    const blob = await response.blob()
+    
+    paperData.value = {
+      unit_id: currentPaperUnit.value.id,
+      unit_name: currentPaperUnit.value.name,
+      question_count: paperQuestionCount.value,
+      difficulty_id: paperDifficultyId.value
+    }
+    
+    paperConfigVisible.value = false
+    paperPreviewVisible.value = true
+    
+    setTimeout(async () => {
+      if (paperPreviewContainer.value) {
+        const { renderAsync } = await import('docx-preview')
+        paperPreviewContainer.value.innerHTML = ''
+        
+        await renderAsync(blob, paperPreviewContainer.value, undefined, {
+          className: 'docx-preview-wrapper',
+          inWrapper: true,
+          ignoreWidth: true,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          breakPages: true,
+          ignoreLastRenderedPageBreak: true,
+          experimental: false,
+          trimXmlDeclaration: true,
+          useBase64URL: true,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderEndnotes: true
+        })
+      }
+    }, 100)
+  } catch (error: any) {
+    showToast(error.message || '生成试卷失败')
+  } finally {
+    generatingPaper.value = false
+  }
+}
+
+async function downloadPaper() {
+  if (!paperData.value) return
+  
+  try {
+    const response = await fetch(`/api/user/download-paper/${paperData.value.unit_id}`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer ' + userStore.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        question_count: paperData.value.question_count,
+        difficulty_id: paperData.value.difficulty_id
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (!response.ok) {
+      showToast(result.detail || '下载失败')
+      return
+    }
+    
+    userStore.userInfo.points = result.points
+    showToast('下载成功，已扣20积分')
+    
+    let url = `/api/user/paper-word/${paperData.value.unit_id}?question_count=${paperData.value.question_count}`
+    if (paperData.value.difficulty_id) {
+      url += `&difficulty_id=${paperData.value.difficulty_id}`
+    }
+    
+    const wordResponse = await fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + userStore.token }
+    })
+    const blob = await wordResponse.blob()
+    const urlObj = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = urlObj
+    a.download = `${paperData.value.unit_name} - 单元测试卷.docx`
+    a.click()
+    window.URL.revokeObjectURL(urlObj)
+    
+    paperPreviewVisible.value = false
+  } catch (error) {
+    showToast('下载失败')
+  }
 }
 
 onMounted(async () => {
@@ -638,5 +846,113 @@ async function downloadUnit() {
 
 .btn-primary:hover {
   opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.unit-qcount {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  color: #4facfe;
+  background: #e6f7ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.paper-config-modal {
+  max-width: 500px;
+}
+
+.paper-config-body {
+  background: #fff;
+  padding: 24px;
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.config-item {
+  margin-bottom: 24px;
+}
+
+.config-item label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.qty-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.qty-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ddd;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qty-btn:hover {
+  background: #e8e8e8;
+}
+
+.qty-selector input {
+  width: 80px;
+  height: 36px;
+  text-align: center;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.config-hint {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #999;
+}
+
+.difficulty-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.diff-option {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #fff;
+}
+
+.diff-option:hover {
+  border-color: #4facfe;
+  color: #4facfe;
+}
+
+.diff-option.active {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: #fff;
+  border-color: transparent;
 }
 </style>
