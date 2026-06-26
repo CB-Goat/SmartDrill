@@ -1355,14 +1355,28 @@ async def import_questions(
                 question_types_cache[question_type_name] = qt.id
             question_type_id = question_types_cache[question_type_name]
             
-            if difficulty_name not in difficulties_cache:
-                diff = db.query(Difficulty).filter(Difficulty.name == difficulty_name).first()
+            DIFFICULTY_MAPPING = {
+                "easy": "简单",
+                "normal": "中等",
+                "hard": "困难",
+                "普通": "简单",
+                "一般": "简单",
+                "基础": "简单",
+                "较易": "简单",
+                "较难": "困难",
+                "复杂": "困难",
+                "适中": "中等",
+            }
+            normalized_diff_name = DIFFICULTY_MAPPING.get(str(difficulty_name).strip(), str(difficulty_name).strip())
+            
+            if normalized_diff_name not in difficulties_cache:
+                diff = db.query(Difficulty).filter(Difficulty.name == normalized_diff_name).first()
                 if not diff:
-                    diff = Difficulty(name=difficulty_name)
+                    diff = Difficulty(name=normalized_diff_name)
                     db.add(diff)
                     db.commit()
-                difficulties_cache[difficulty_name] = diff.id
-            difficulty_id = difficulties_cache[difficulty_name]
+                difficulties_cache[normalized_diff_name] = diff.id
+            difficulty_id = difficulties_cache[normalized_diff_name]
             
             import json
             question_json = None
