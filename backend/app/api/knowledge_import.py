@@ -17,9 +17,6 @@ from docx.oxml import OxmlElement
 from io import BytesIO
 from typing import List
 from urllib.parse import quote
-import json
-from sse_starlette.sse import EventSourceResponse
-import asyncio
 
 router = APIRouter(prefix="/admin", tags=["知识考点管理"])
 
@@ -87,6 +84,302 @@ def format_content(doc, content):
             p.paragraph_format.first_line_indent = Pt(24)
             p.add_run(line)
             i += 1
+
+
+def add_heading_styled(doc, text, level=2):
+    p = doc.add_paragraph()
+    run = p.add_run(text)
+    run.font.bold = True
+    if level == 1:
+        run.font.size = Pt(16)
+        run.font.color.rgb = RGBColor(0, 102, 204)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    elif level == 2:
+        run.font.size = Pt(14)
+        run.font.color.rgb = RGBColor(0, 102, 204)
+    elif level == 3:
+        run.font.size = Pt(12)
+        run.font.color.rgb = RGBColor(0, 80, 160)
+    run.font.name = '宋体'
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    return p
+
+
+def add_list_items(doc, items):
+    if not items:
+        return
+    for i, item in enumerate(items, 1):
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Pt(24)
+        p.paragraph_format.line_spacing = 1.5
+        num_run = p.add_run(f'{i}. ')
+        num_run.font.bold = True
+        num_run.font.size = Pt(11)
+        num_run.font.color.rgb = RGBColor(51, 102, 204)
+        num_run.font.name = '宋体'
+        num_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        text_run = p.add_run(item)
+        text_run.font.size = Pt(11)
+        text_run.font.name = '宋体'
+        text_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+
+def add_compare_items(doc, items):
+    if not items:
+        return
+    for item in items:
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Pt(24)
+        p.paragraph_format.line_spacing = 1.5
+        text_run = p.add_run(item)
+        text_run.font.size = Pt(11)
+        text_run.font.name = '宋体'
+        text_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+
+def add_overview_text(doc, overview_text):
+    if not overview_text:
+        return
+    lines = overview_text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Pt(24)
+        p.paragraph_format.line_spacing = 1.5
+        run = p.add_run(line)
+        run.font.size = Pt(11)
+        run.font.name = '宋体'
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+
+def add_example(doc, example):
+    if not example:
+        return
+    q_type = example.get('question_type', '')
+    type_map = {
+        'single_choice': '单选题',
+        'multi_choice': '多选题',
+        'calculation': '计算题',
+        'short_answer': '简答题',
+        'fill_blank': '填空题',
+        'reading_comprehension': '阅读理解题',
+        'experiment': '实验探究题',
+        'material_analysis': '材料分析题',
+    }
+    type_label = type_map.get(q_type, q_type or '典型例题')
+
+    add_heading_styled(doc, f'【{type_label}】', 3)
+    stem = example.get('stem', '')
+    if stem:
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Pt(24)
+        p.paragraph_format.line_spacing = 1.5
+        run = p.add_run(stem)
+        run.font.size = Pt(11)
+        run.font.name = '宋体'
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+    content = example.get('content', {})
+    if isinstance(content, dict) and content:
+        for key in ['A', 'B', 'C', 'D']:
+            if key in content:
+                p = doc.add_paragraph()
+                p.paragraph_format.first_line_indent = Pt(48)
+                run = p.add_run(f'{key}. {content[key]}')
+                run.font.size = Pt(11)
+                run.font.name = '宋体'
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+    answer = example.get('answer', {})
+    if answer:
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Pt(24)
+        key_run = p.add_run('【答案】')
+        key_run.font.bold = True
+        key_run.font.color.rgb = RGBColor(204, 0, 0)
+        key_run.font.size = Pt(11)
+        key_run.font.name = '宋体'
+        key_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        if isinstance(answer, dict):
+            ans_text = answer.get('correct', '') or answer.get('standard', '') or ''
+            if not ans_text and answer.get('final_result'):
+                ans_text = '\n'.join(answer['final_result'])
+            if not ans_text and answer.get('steps'):
+                ans_text = '\n'.join(answer['steps'])
+        else:
+            ans_text = str(answer)
+        if ans_text:
+            for line in ans_text.split('\n'):
+                if line:
+                    p2 = doc.add_paragraph()
+                    p2.paragraph_format.first_line_indent = Pt(48)
+                    run = p2.add_run(line)
+                    run.font.size = Pt(11)
+                    run.font.name = '宋体'
+                    run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+    analysis = example.get('analysis', {})
+    if analysis:
+        p = doc.add_paragraph()
+        p.paragraph_format.first_line_indent = Pt(24)
+        key_run = p.add_run('【解析】')
+        key_run.font.bold = True
+        key_run.font.color.rgb = RGBColor(0, 128, 0)
+        key_run.font.size = Pt(11)
+        key_run.font.name = '宋体'
+        key_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        text = analysis.get('text', '') or str(analysis)
+        if text:
+            p2 = doc.add_paragraph()
+            p2.paragraph_format.first_line_indent = Pt(48)
+            run = p2.add_run(text)
+            run.font.size = Pt(11)
+            run.font.name = '宋体'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        extra = analysis.get('extra', '')
+        if extra:
+            p3 = doc.add_paragraph()
+            p3.paragraph_format.first_line_indent = Pt(48)
+            run = p3.add_run(f'考点提示：{extra}')
+            run.font.size = Pt(11)
+            run.font.color.rgb = RGBColor(255, 140, 0)
+            run.font.name = '宋体'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+
+def generate_unit_word_doc(unit, semester, subject, grade, unit_knowledge_json=None, exam_points=None):
+    doc = Document()
+
+    style = doc.styles['Normal']
+    style.font.name = '宋体'
+    style.font.size = Pt(12)
+    style._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+    title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name}"
+
+    title = doc.add_paragraph()
+    title_run = title.add_run(title_text)
+    title_run.font.size = Pt(18)
+    title_run.font.bold = True
+    title_run.font.name = '宋体'
+    title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    knowledge_data = unit_knowledge_json if isinstance(unit_knowledge_json, dict) else None
+
+    if knowledge_data:
+        unit_topic = knowledge_data.get('unit_topic', '')
+        if unit_topic:
+            sub_title = doc.add_paragraph()
+            sub_run = sub_title.add_run(f'（{unit_topic}）')
+            sub_run.font.size = Pt(14)
+            sub_run.font.color.rgb = RGBColor(102, 102, 102)
+            sub_run.font.name = '宋体'
+            sub_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+            sub_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph()
+
+    if knowledge_data:
+        add_heading_styled(doc, '一、单元概述', 2)
+        add_overview_text(doc, knowledge_data.get('unit_overview', ''))
+        doc.add_paragraph()
+
+        add_heading_styled(doc, '二、知识框架', 2)
+        frame = knowledge_data.get('knowledge_frame', '')
+        if frame:
+            p = doc.add_paragraph()
+            p.paragraph_format.first_line_indent = Pt(24)
+            run = p.add_run(frame)
+            run.font.size = Pt(12)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            run.font.name = '宋体'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+        doc.add_paragraph()
+
+        add_heading_styled(doc, '三、核心概念', 2)
+        add_list_items(doc, knowledge_data.get('core_concepts', []))
+        doc.add_paragraph()
+
+        add_heading_styled(doc, '四、重点知识', 2)
+        add_list_items(doc, knowledge_data.get('key_knowledge', []))
+        doc.add_paragraph()
+
+        add_heading_styled(doc, '五、难点解析', 2)
+        add_list_items(doc, knowledge_data.get('difficult_analysis', []))
+        doc.add_paragraph()
+
+        add_heading_styled(doc, '六、易混辨析', 2)
+        add_compare_items(doc, knowledge_data.get('confuse_distinction', []))
+        doc.add_paragraph()
+
+        add_heading_styled(doc, '七、典型例题', 2)
+        add_example(doc, knowledge_data.get('typical_example', {}))
+    else:
+        knowledge = None
+        try:
+            from app.models.models import KnowledgePoint
+            knowledge = KnowledgePoint.query.filter(KnowledgePoint.unit_id == unit.id).first()
+        except:
+            pass
+        add_heading_styled(doc, '知识点', 1)
+        if knowledge and knowledge.content:
+            format_content(doc, knowledge.content)
+        else:
+            p = doc.add_paragraph()
+            run = p.add_run('暂无知识点内容')
+            run.font.color.rgb = RGBColor(153, 153, 153)
+
+    if exam_points:
+        doc.add_page_break()
+        add_heading_styled(doc, '考点', 1)
+
+        for idx, ep in enumerate(exam_points, 1):
+            p = doc.add_paragraph()
+
+            tab_stops = p.paragraph_format.tab_stops
+            tab_stops.add_tab_stop(Inches(2.5), WD_TAB_ALIGNMENT.CENTER)
+            tab_stops.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
+
+            title_run = p.add_run(f"{idx}. {ep.title}")
+            title_run.font.size = Pt(14)
+            title_run.font.bold = True
+            title_run.font.name = '宋体'
+            title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+
+            p.add_run('\t')
+
+            if ep.exam_types:
+                types_run = p.add_run(f"{{{ep.exam_types}}}")
+                types_run.font.size = Pt(12)
+                types_run.font.name = '宋体'
+                types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                types_run.font.color.rgb = RGBColor(255, 105, 180)
+
+            p.add_run('\t')
+
+            if ep.exam_frequency:
+                freq_text = ep.exam_frequency.value
+                freq_run = p.add_run(f"[{freq_text}]")
+                freq_run.font.size = Pt(12)
+                freq_run.font.name = '宋体'
+                freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+                if freq_text == '必考':
+                    freq_run.font.color.rgb = RGBColor(255, 0, 0)
+                elif freq_text == '常考':
+                    freq_run.font.color.rgb = RGBColor(255, 153, 0)
+                else:
+                    freq_run.font.color.rgb = RGBColor(0, 153, 0)
+
+            if ep.content:
+                format_content(doc, ep.content)
+
+            doc.add_paragraph()
+
+    return doc
 
 @router.get("/knowledge-exam-points")
 def get_knowledge_exam_points(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -856,6 +1149,7 @@ def query_units(
         grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
         
         has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
+        has_8modules = unit.unit_knowledge_json is not None and isinstance(unit.unit_knowledge_json, dict) and bool(unit.unit_knowledge_json)
         exam_point_count = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).count()
         
         result.append({
@@ -866,6 +1160,7 @@ def query_units(
             "unit_number": unit.unit_number,
             "name": unit.name,
             "has_knowledge": has_knowledge,
+            "has_8modules": has_8modules,
             "exam_point_count": exam_point_count
         })
     
@@ -877,15 +1172,35 @@ def get_unit_detail(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).first()
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="单元不存在")
+
     exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == unit_id).all()
-    
+
+    knowledge_8modules = None
+    if unit.unit_knowledge_json and isinstance(unit.unit_knowledge_json, dict):
+        k = unit.unit_knowledge_json
+        knowledge_8modules = {
+            "unit_topic": k.get("unit_topic", ""),
+            "unit_overview": k.get("unit_overview", ""),
+            "knowledge_frame": k.get("knowledge_frame", ""),
+            "core_concepts": k.get("core_concepts", []),
+            "key_knowledge": k.get("key_knowledge", []),
+            "difficult_analysis": k.get("difficult_analysis", []),
+            "confuse_distinction": k.get("confuse_distinction", []),
+            "typical_example": k.get("typical_example", {}),
+        }
+
+    knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).first()
+
     return {
         "knowledge": {
             "id": knowledge.id,
             "title": knowledge.title,
             "content": knowledge.content
         } if knowledge else None,
+        "knowledge_8modules": knowledge_8modules,
         "exam_points": [{
             "id": ep.id,
             "title": ep.title,
@@ -909,100 +1224,18 @@ def get_unit_word(
     subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
     grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
     
-    knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).first()
     exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == unit_id).all()
     
-    doc = Document()
-    
-    style = doc.styles['Normal']
-    style.font.name = '宋体'
-    style.font.size = Pt(12)
-    style._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    doc = generate_unit_word_doc(
+        unit=unit,
+        semester=semester,
+        subject=subject,
+        grade=grade,
+        unit_knowledge_json=unit.unit_knowledge_json,
+        exam_points=exam_points
+    )
     
     title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name}"
-    
-    title = doc.add_paragraph()
-    title_run = title.add_run(title_text)
-    title_run.font.size = Pt(18)
-    title_run.font.bold = True
-    title_run.font.name = '宋体'
-    title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    subtitle = doc.add_paragraph()
-    subtitle_run = subtitle.add_run("知识点")
-    subtitle_run.font.size = Pt(16)
-    subtitle_run.font.bold = True
-    subtitle_run.font.color.rgb = RGBColor(0, 102, 204)
-    subtitle_run.font.name = '宋体'
-    subtitle_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    if knowledge and knowledge.content:
-        format_content(doc, knowledge.content)
-    else:
-        p = doc.add_paragraph()
-        run = p.add_run("暂无知识点内容")
-        run.font.color.rgb = RGBColor(153, 153, 153)
-    
-    doc.add_page_break()
-    
-    subtitle2 = doc.add_paragraph()
-    subtitle2_run = subtitle2.add_run("考点")
-    subtitle2_run.font.size = Pt(16)
-    subtitle2_run.font.bold = True
-    subtitle2_run.font.color.rgb = RGBColor(0, 102, 204)
-    subtitle2_run.font.name = '宋体'
-    subtitle2_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    subtitle2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    if exam_points:
-        for idx, ep in enumerate(exam_points, 1):
-            p = doc.add_paragraph()
-            
-            tab_stops = p.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(2.5), WD_TAB_ALIGNMENT.CENTER)
-            tab_stops.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
-            
-            title_run = p.add_run(f"{idx}. {ep.title}")
-            title_run.font.size = Pt(14)
-            title_run.font.bold = True
-            title_run.font.name = '宋体'
-            title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-            
-            p.add_run('\t')
-            
-            if ep.exam_types:
-                types_run = p.add_run(f"{{{ep.exam_types}}}")
-                types_run.font.size = Pt(12)
-                types_run.font.name = '宋体'
-                types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-                types_run.font.color.rgb = RGBColor(255, 105, 180)
-            
-            p.add_run('\t')
-            
-            if ep.exam_frequency:
-                freq_text = ep.exam_frequency.value
-                freq_run = p.add_run(f"[{freq_text}]")
-                freq_run.font.size = Pt(12)
-                freq_run.font.name = '宋体'
-                freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-                if freq_text == '必考':
-                    freq_run.font.color.rgb = RGBColor(255, 0, 0)
-                elif freq_text == '常考':
-                    freq_run.font.color.rgb = RGBColor(255, 153, 0)
-                else:
-                    freq_run.font.color.rgb = RGBColor(0, 153, 0)
-            
-            if ep.content:
-                format_content(doc, ep.content)
-            
-            doc.add_paragraph()
-    else:
-        p = doc.add_paragraph()
-        run = p.add_run("暂无考点内容")
-        run.font.color.rgb = RGBColor(153, 153, 153)
-    
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -1024,13 +1257,13 @@ async def import_questions(
 ):
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="只支持Excel文件")
-
+    
     wb = load_workbook(BytesIO(await file.read()))
     ws = wb.active
-
+    
     question_types_cache = {}
     difficulties_cache = {}
-
+    
     imported = 0
     skipped = 0
     errors = []
@@ -1043,237 +1276,133 @@ async def import_questions(
         "其他错误": 0
     }
     skip_details = []
-
-    total_rows = ws.max_row - 1
-
-    async def event_generator():
-        nonlocal imported, skipped, errors, skip_reasons, skip_details
-
-        yield {"event": "start", "data": json.dumps({"total": total_rows}, ensure_ascii=False)}
-
-        processed = 0
-        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-            if not row[0]:
-                skip_reasons["首列为空"] += 1
+    
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row[0]:
+            skip_reasons["首列为空"] += 1
+            skipped += 1
+            continue
+        
+        try:
+            subject_name = row[0]
+            grade_name = row[1]
+            semester_name = row[2]
+            unit_number = row[3]
+            unit_name = row[5]
+            exam_point_title = row[6]
+            question_type_name = row[9]
+            difficulty_name = row[10]
+            stem_text = row[11]
+            answer_text = row[12]
+            analysis_text = row[13]
+            json_content = row[14]
+            
+            grade = db.query(Grade).filter(Grade.name == grade_name).first()
+            if not grade:
+                skip_reasons["年级不存在"] += 1
                 skipped += 1
-                skip_details.append(f"第{row_idx}行: 首列为空")
-                processed += 1
-                yield {
-                    "event": "progress",
-                    "data": json.dumps({
-                        "current": processed,
-                        "total": total_rows,
-                        "imported": imported,
-                        "skipped": skipped,
-                        "reason": "首列为空"
-                    }, ensure_ascii=False)
-                }
+                skip_details.append(f"第{row_idx}行: 年级'{grade_name}'不存在")
                 continue
-
-            try:
-                subject_name = row[0]
-                grade_name = row[1]
-                semester_name = row[2]
-                unit_number = row[3]
-                unit_name = row[5]
-                exam_point_title = row[6]
-                question_type_name = row[9]
-                difficulty_name = row[10]
-                stem_text = row[11]
-                answer_text = row[12]
-                analysis_text = row[13]
-                json_content = row[14]
-
-                grade = db.query(Grade).filter(Grade.name == grade_name).first()
-                if not grade:
-                    skip_reasons["年级不存在"] += 1
-                    skipped += 1
-                    skip_details.append(f"第{row_idx}行: 年级'{grade_name}'不存在")
-                    processed += 1
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({
-                            "current": processed,
-                            "total": total_rows,
-                            "imported": imported,
-                            "skipped": skipped,
-                            "reason": f"年级'{grade_name}'不存在"
-                        }, ensure_ascii=False)
-                    }
-                    continue
-
-                subject = db.query(Subject).filter(
-                    Subject.grade_id == grade.id,
-                    Subject.name == subject_name
-                ).first()
-                if not subject:
-                    skip_reasons["科目不存在"] += 1
-                    skipped += 1
-                    skip_details.append(f"第{row_idx}行: 科目'{subject_name}'不存在")
-                    processed += 1
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({
-                            "current": processed,
-                            "total": total_rows,
-                            "imported": imported,
-                            "skipped": skipped,
-                            "reason": f"科目'{subject_name}'不存在"
-                        }, ensure_ascii=False)
-                    }
-                    continue
-
-                semester = db.query(Semester).filter(
-                    Semester.subject_id == subject.id,
-                    Semester.name.like(f"%{semester_name}%")
-                ).first()
-                if not semester:
-                    skip_reasons["学期不存在"] += 1
-                    skipped += 1
-                    skip_details.append(f"第{row_idx}行: 学期'{semester_name}'不存在")
-                    processed += 1
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({
-                            "current": processed,
-                            "total": total_rows,
-                            "imported": imported,
-                            "skipped": skipped,
-                            "reason": f"学期'{semester_name}'不存在"
-                        }, ensure_ascii=False)
-                    }
-                    continue
-
+            
+            subject = db.query(Subject).filter(
+                Subject.grade_id == grade.id,
+                Subject.name == subject_name
+            ).first()
+            if not subject:
+                skip_reasons["科目不存在"] += 1
+                skipped += 1
+                skip_details.append(f"第{row_idx}行: 科目'{subject_name}'不存在")
+                continue
+            
+            semester = db.query(Semester).filter(
+                Semester.subject_id == subject.id,
+                Semester.name.like(f"%{semester_name}%")
+            ).first()
+            if not semester:
+                skip_reasons["学期不存在"] += 1
+                skipped += 1
+                skip_details.append(f"第{row_idx}行: 学期'{semester_name}'不存在")
+                continue
+            
+            unit = db.query(Unit).filter(
+                Unit.semester_id == semester.id,
+                Unit.unit_number == int(unit_number) if unit_number else None
+            ).first()
+            if not unit:
                 unit = db.query(Unit).filter(
                     Unit.semester_id == semester.id,
-                    Unit.unit_number == int(unit_number) if unit_number else None
+                    Unit.name == unit_name
                 ).first()
-                if not unit:
-                    unit = db.query(Unit).filter(
-                        Unit.semester_id == semester.id,
-                        Unit.name == unit_name
-                    ).first()
-                if not unit:
-                    skip_reasons["单元不存在"] += 1
-                    skipped += 1
-                    skip_details.append(f"第{row_idx}行: 单元'{unit_name}'(序号{unit_number})不存在")
-                    processed += 1
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({
-                            "current": processed,
-                            "total": total_rows,
-                            "imported": imported,
-                            "skipped": skipped,
-                            "reason": f"单元'{unit_name}'(序号{unit_number})不存在"
-                        }, ensure_ascii=False)
-                    }
-                    continue
-
-                exam_point = None
-                if exam_point_title:
-                    exam_point = db.query(ExamPoint).filter(
-                        ExamPoint.unit_id == unit.id,
-                        ExamPoint.title == exam_point_title
-                    ).first()
-
-                if question_type_name not in question_types_cache:
-                    qt = db.query(QuestionType).filter(QuestionType.name == question_type_name).first()
-                    if not qt:
-                        qt = QuestionType(name=question_type_name)
-                        db.add(qt)
-                        db.commit()
-                    question_types_cache[question_type_name] = qt.id
-                question_type_id = question_types_cache[question_type_name]
-
-                if difficulty_name not in difficulties_cache:
-                    diff = db.query(Difficulty).filter(Difficulty.name == difficulty_name).first()
-                    if not diff:
-                        diff = Difficulty(name=difficulty_name)
-                        db.add(diff)
-                        db.commit()
-                    difficulties_cache[difficulty_name] = diff.id
-                difficulty_id = difficulties_cache[difficulty_name]
-
-                question_json = None
-                if json_content:
-                    try:
-                        question_json = json.loads(json_content) if isinstance(json_content, str) else json_content
-                    except:
-                        pass
-
-                question = Question(
-                    version_id=grade.version_id,
-                    grade_id=grade.id,
-                    subject_id=subject.id,
-                    semester_id=semester.id,
-                    unit_id=unit.id,
-                    exam_point_id=exam_point.id if exam_point else None,
-                    question_type_id=question_type_id,
-                    difficulty_id=difficulty_id,
-                    content=stem_text or "",
-                    answer=answer_text or "",
-                    analysis=analysis_text or "",
-                    question_json=question_json,
-                    question_type=question_type_name,
-                    stem=stem_text
-                )
-                db.add(question)
-                imported += 1
-                processed += 1
-
-                if processed % 10 == 0 or processed == total_rows:
-                    db.commit()
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({
-                            "current": processed,
-                            "total": total_rows,
-                            "imported": imported,
-                            "skipped": skipped,
-                            "reason": None
-                        }, ensure_ascii=False)
-                    }
-                else:
-                    yield {
-                        "event": "progress",
-                        "data": json.dumps({
-                            "current": processed,
-                            "total": total_rows,
-                            "imported": imported,
-                            "skipped": skipped,
-                            "reason": None
-                        }, ensure_ascii=False)
-                    }
-
-            except Exception as e:
-                skip_reasons["其他错误"] += 1
-                errors.append(f"第{row_idx}行: {str(e)}")
+            if not unit:
+                skip_reasons["单元不存在"] += 1
                 skipped += 1
-                processed += 1
-                yield {
-                    "event": "progress",
-                    "data": json.dumps({
-                        "current": processed,
-                        "total": total_rows,
-                        "imported": imported,
-                        "skipped": skipped,
-                        "reason": f"错误: {str(e)}"
-                    }, ensure_ascii=False)
-                }
-
-        db.commit()
-
-        yield {
-            "event": "complete",
-            "data": json.dumps({
-                "message": "题库导入完成",
-                "imported": imported,
-                "skipped": skipped,
-                "skip_reasons": skip_reasons,
-                "skip_details": skip_details[:20],
-                "errors": errors[:10]
-            }, ensure_ascii=False)
-        }
-
-    return EventSourceResponse(event_generator())
+                skip_details.append(f"第{row_idx}行: 单元'{unit_name}'(序号{unit_number})不存在")
+                continue
+            
+            exam_point = None
+            if exam_point_title:
+                exam_point = db.query(ExamPoint).filter(
+                    ExamPoint.unit_id == unit.id,
+                    ExamPoint.title == exam_point_title
+                ).first()
+            
+            if question_type_name not in question_types_cache:
+                qt = db.query(QuestionType).filter(QuestionType.name == question_type_name).first()
+                if not qt:
+                    qt = QuestionType(name=question_type_name)
+                    db.add(qt)
+                    db.commit()
+                question_types_cache[question_type_name] = qt.id
+            question_type_id = question_types_cache[question_type_name]
+            
+            if difficulty_name not in difficulties_cache:
+                diff = db.query(Difficulty).filter(Difficulty.name == difficulty_name).first()
+                if not diff:
+                    diff = Difficulty(name=difficulty_name)
+                    db.add(diff)
+                    db.commit()
+                difficulties_cache[difficulty_name] = diff.id
+            difficulty_id = difficulties_cache[difficulty_name]
+            
+            import json
+            question_json = None
+            if json_content:
+                try:
+                    question_json = json.loads(json_content) if isinstance(json_content, str) else json_content
+                except:
+                    pass
+            
+            question = Question(
+                version_id=grade.version_id,
+                grade_id=grade.id,
+                subject_id=subject.id,
+                semester_id=semester.id,
+                unit_id=unit.id,
+                exam_point_id=exam_point.id if exam_point else None,
+                question_type_id=question_type_id,
+                difficulty_id=difficulty_id,
+                content=stem_text or "",
+                answer=answer_text or "",
+                analysis=analysis_text or "",
+                question_json=question_json,
+                question_type=question_type_name,
+                stem=stem_text
+            )
+            db.add(question)
+            imported += 1
+            
+        except Exception as e:
+            skip_reasons["其他错误"] += 1
+            errors.append(f"第{row_idx}行: {str(e)}")
+            skipped += 1
+    
+    db.commit()
+    
+    return {
+        "message": "题库导入完成",
+        "imported": imported,
+        "skipped": skipped,
+        "skip_reasons": skip_reasons,
+        "skip_details": skip_details[:20],
+        "errors": errors[:10]
+    }

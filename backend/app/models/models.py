@@ -102,6 +102,7 @@ class Unit(Base):
     semester_id = Column(Integer, ForeignKey("semesters.id", ondelete="CASCADE"), nullable=False)
     unit_number = Column(Integer, nullable=False)
     name = Column(String(100), nullable=False)
+    unit_knowledge_json = Column(JSON)
     knowledge_points = relationship("KnowledgePoint", back_populates="unit", cascade="all, delete-orphan")
     exam_points = relationship("ExamPoint", back_populates="unit", cascade="all, delete-orphan")
     semester = relationship("Semester", back_populates="units")

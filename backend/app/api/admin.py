@@ -1,19 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from app.database import get_db
+from app.database import get_db, engine
 from app.models.models import (
-    User, Recharge, Order, Version, Grade, Subject, Semester, Unit,
+    User, AdminUser, Recharge, Order, Version, Grade, Subject, Semester, Unit,
     KnowledgePoint, ExamPoint, QuestionType, Difficulty, Question
 )
 from app.utils.auth import get_current_admin
 from typing import List
+from sse_starlette.sse import EventSourceResponse
+import asyncio
+import json
+import re
+import openpyxl
+import io
+from sqlalchemy import text
 
 router = APIRouter(prefix="/admin", tags=["管理"])
 
 @router.get("/users")
 def get_users(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     users = db.query(User).all()
-    return [{"id": u.id, "username": u.username, "phone": u.phone, "points": u.points, "role": "user"} for u in users]
+    return [{"id": u.id, "username": u.username, "phone": u.phone, "points": u.points, "role": u.role.value} for u in users]
 
 @router.get("/recharges")
 def get_recharges(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -25,17 +32,9 @@ def get_orders(admin: User = Depends(get_current_admin), db: Session = Depends(g
     orders = db.query(Order).order_by(Order.created_at.desc()).all()
     return [{"id": o.id, "username": o.user.username, "title": o.title, "points": o.points, "created_at": o.created_at} for o in orders]
 
-import time
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 @router.get("/versions")
 def get_versions(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    start = time.time()
-    result = db.query(Version).all()
-    logger.info(f"get_versions: {time.time()-start:.3f}s, {len(result)} rows")
-    return result
+    return db.query(Version).all()
 
 @router.post("/versions")
 def save_version(data: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -154,6 +153,22 @@ def delete_unit(id: int, admin: User = Depends(get_current_admin), db: Session =
     db.commit()
     return {"message": "删除成功"}
 
+@router.get("/units/{id}/knowledge-json")
+def get_unit_knowledge_json(id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    u = db.query(Unit).filter(Unit.id == id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    return u.unit_knowledge_json or {}
+
+@router.put("/units/{id}/knowledge-json")
+def update_unit_knowledge_json(id: int, data: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    u = db.query(Unit).filter(Unit.id == id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="单元不存在")
+    u.unit_knowledge_json = data
+    db.commit()
+    return {"message": "保存成功"}
+
 @router.get("/knowledge")
 def get_knowledge(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     query = db.query(KnowledgePoint)
@@ -207,100 +222,28 @@ def get_difficulties(admin: User = Depends(get_current_admin), db: Session = Dep
     return db.query(Difficulty).all()
 
 @router.get("/questions")
-def get_questions(
-    version_id: int = None,
-    grade_id: int = None,
-    subject_id: int = None,
-    semester_id: int = None,
-    unit_id: int = None,
-    question_type_id: int = None,
-    difficulty_id: int = None,
-    page: int = 1,
-    page_size: int = 50,
-    admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    query = db.query(
-        Question,
-        Grade.name.label('grade_name'),
-        Subject.name.label('subject_name'),
-        Semester.name.label('semester_name'),
-        Unit.name.label('unit_name'),
-        QuestionType.name.label('question_type_name'),
-        Difficulty.name.label('difficulty_name'),
-        ExamPoint.title.label('exam_point_title')
-    ).outerjoin(Grade, Question.grade_id == Grade.id
-    ).outerjoin(Subject, Question.subject_id == Subject.id
-    ).outerjoin(Semester, Question.semester_id == Semester.id
-    ).outerjoin(Unit, Question.unit_id == Unit.id
-    ).outerjoin(QuestionType, Question.question_type_id == QuestionType.id
-    ).outerjoin(Difficulty, Question.difficulty_id == Difficulty.id
-    ).outerjoin(ExamPoint, Question.exam_point_id == ExamPoint.id)
-
-    if version_id:
-        query = query.filter(Question.version_id == version_id)
-    if grade_id:
-        query = query.filter(Question.grade_id == grade_id)
-    if subject_id:
-        query = query.filter(Question.subject_id == subject_id)
-    if semester_id:
-        query = query.filter(Question.semester_id == semester_id)
+def get_questions(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    query = db.query(Question)
     if unit_id:
         query = query.filter(Question.unit_id == unit_id)
-    if question_type_id:
-        query = query.filter(Question.question_type_id == question_type_id)
-    if difficulty_id:
-        query = query.filter(Question.difficulty_id == difficulty_id)
-
-    total = query.count()
-    rows = query.order_by(Question.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-
+    questions = query.all()
     result = []
-    for q, grade_name, subject_name, semester_name, unit_name, qt_name, diff_name, ep_title in rows:
-        if diff_name:
-            diff_raw = diff_name.lower()
-            if diff_raw in ['easy', 'simple', '简单']:
-                diff_name_cn = '简单'
-            elif diff_raw in ['normal', 'medium', '普通', '中等']:
-                diff_name_cn = '普通'
-            elif diff_raw in ['hard', 'difficult', '困难']:
-                diff_name_cn = '困难'
-            else:
-                diff_name_cn = diff_name
-        else:
-            diff_name_cn = None
-
+    for q in questions:
         result.append({
             "id": q.id,
             "content": q.content,
-            "stem": q.stem,
-            "question_json": q.question_json,
             "answer": q.answer,
             "analysis": q.analysis,
-            "question_type": qt_name,
-            "difficulty": diff_name_cn,
-            "grade_name": grade_name,
-            "subject_name": subject_name,
-            "semester_name": semester_name,
-            "unit_name": unit_name,
-            "exam_point_title": ep_title,
+            "question_type": q.question_type_obj.name if q.question_type_obj else None,
+            "difficulty": q.difficulty_obj.name if q.difficulty_obj else None,
+            "exam_point_title": q.exam_point.title if q.exam_point else None,
             "question_type_id": q.question_type_id,
             "difficulty_id": q.difficulty_id,
             "unit_id": q.unit_id,
-            "exam_point_id": q.exam_point_id,
-            "grade_id": q.grade_id,
-            "subject_id": q.subject_id,
-            "semester_id": q.semester_id,
             "knowledge_point_id": q.knowledge_point_id,
+            "exam_point_id": q.exam_point_id
         })
-
-    return {
-        "items": result,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size
-    }
+    return result
 
 @router.post("/questions")
 def save_question(data: dict, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -317,30 +260,257 @@ def save_question(data: dict, admin: User = Depends(get_current_admin), db: Sess
     db.refresh(q)
     return {"id": q.id, "message": "保存成功"}
 
-@router.delete("/questions")
-def delete_questions(
-    version_id: int = None,
-    grade_id: int = None,
-    subject_id: int = None,
-    semester_id: int = None,
-    unit_id: int = None,
-    admin: User = Depends(get_current_admin),
+
+def _ensure_knowledge_column():
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SHOW COLUMNS FROM units LIKE 'unit_knowledge_json'"))
+            if not result.fetchone():
+                conn.execute(text("ALTER TABLE units ADD COLUMN unit_knowledge_json JSON"))
+                conn.commit()
+    except Exception:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE units ADD COLUMN unit_knowledge_json JSON"))
+                conn.commit()
+        except Exception:
+            pass
+
+
+def _find_unit(db, subject_name, grade_name, semester_name, unit_number):
+    version = db.query(Version).filter(Version.name.like('%人教%')).first()
+    if not version:
+        version = db.query(Version).first()
+    if not version:
+        return None
+    grade = db.query(Grade).filter(Grade.version_id == version.id, Grade.name == grade_name).first()
+    if not grade:
+        return None
+    subject = db.query(Subject).filter(Subject.grade_id == grade.id, Subject.name == subject_name).first()
+    if not subject:
+        return None
+    semester = db.query(Semester).filter(Semester.subject_id == subject.id, Semester.name == semester_name).first()
+    if not semester:
+        return None
+    unit = db.query(Unit).filter(Unit.semester_id == semester.id, Unit.unit_number == unit_number).first()
+    return unit
+
+
+def _parse_array(text):
+    if not text:
+        return []
+    lines = [l.strip() for l in str(text).split('\n') if l.strip()]
+    items = []
+    for line in lines:
+        cleaned = re.sub(r'^\d+[.、．)]\s*', '', line)
+        cleaned = re.sub(r'^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*', '', cleaned)
+        if cleaned:
+            items.append(cleaned)
+    return items
+
+
+def _sync_knowledge_points(db, unit_id, knowledge_data):
+    if not knowledge_data:
+        return 0
+    kp_sources = [
+        ('核心概念', knowledge_data.get('core_concepts', [])),
+        ('重点知识', knowledge_data.get('key_knowledge', [])),
+        ('难点解析', knowledge_data.get('difficult_analysis', [])),
+        ('易混辨析', knowledge_data.get('confuse_distinction', [])),
+    ]
+    all_points = []
+    for category, items in kp_sources:
+        for item in items:
+            title = f'[{category}] {item[:50]}'
+            if len(item) > 50:
+                title += '...'
+            all_points.append({'title': title, 'content': item})
+    if not all_points:
+        return 0
+    db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).delete()
+    for point in all_points:
+        kp = KnowledgePoint(unit_id=unit_id, title=point['title'], content=point['content'])
+        db.add(kp)
+    return len(all_points)
+
+
+@router.post("/knowledge/import-8modules")
+async def import_knowledge_8modules(
+    file: UploadFile = File(...),
+    admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Question)
-    if version_id:
-        query = query.filter(Question.version_id == version_id)
-    if grade_id:
-        query = query.filter(Question.grade_id == grade_id)
-    if subject_id:
-        query = query.filter(Question.subject_id == subject_id)
+    async def event_generator():
+        try:
+            _ensure_knowledge_column()
+            yield {"event": "message", "data": json.dumps({
+                "type": "progress",
+                "current": 0,
+                "total": 0,
+                "status": "info",
+                "message": "读取Excel文件..."
+            }, ensure_ascii=False)}
+            await asyncio.sleep(0.1)
+
+            content = await file.read()
+            wb = openpyxl.load_workbook(io.BytesIO(content))
+            ws = wb.active
+            total_rows = ws.max_row - 1
+
+            yield {"event": "message", "data": json.dumps({
+                "type": "progress",
+                "current": 0,
+                "total": total_rows,
+                "status": "info",
+                "message": f"共 {total_rows} 个单元，开始匹配导入..."
+            }, ensure_ascii=False)}
+            await asyncio.sleep(0.1)
+
+            matched = 0
+            not_matched = 0
+            total_kp = 0
+            errors = []
+
+            for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
+                subject = row[0]
+                grade = row[1]
+                semester = row[2]
+                unit_num = row[3]
+                unit_name = row[5]
+                json_content = row[15] if len(row) > 15 else None
+
+                if not subject or not unit_name:
+                    continue
+
+                knowledge_data = None
+                if json_content:
+                    try:
+                        knowledge_data = json.loads(str(json_content))
+                    except Exception:
+                        pass
+
+                if not knowledge_data:
+                    unit_topic = row[6] if len(row) > 6 else ''
+                    unit_overview = row[7] if len(row) > 7 else ''
+                    knowledge_frame = row[8] if len(row) > 8 else ''
+                    core_text = row[9] if len(row) > 9 else ''
+                    key_text = row[10] if len(row) > 10 else ''
+                    diff_text = row[11] if len(row) > 11 else ''
+                    confuse_text = row[12] if len(row) > 12 else ''
+                    example_text = row[13] if len(row) > 13 else ''
+                    typical_example = {}
+                    if example_text:
+                        try:
+                            typical_example = json.loads(str(example_text))
+                        except Exception:
+                            typical_example = {'stem': str(example_text)[:500]}
+                    knowledge_data = {
+                        'unit_topic': str(unit_topic or ''),
+                        'unit_overview': str(unit_overview or ''),
+                        'knowledge_frame': str(knowledge_frame or ''),
+                        'core_concepts': _parse_array(core_text),
+                        'key_knowledge': _parse_array(key_text),
+                        'difficult_analysis': _parse_array(diff_text),
+                        'confuse_distinction': _parse_array(confuse_text),
+                        'typical_example': typical_example
+                    }
+
+                unit = _find_unit(db, subject, grade, semester, unit_num)
+
+                status = "success"
+                msg = ""
+                if unit:
+                    matched += 1
+                    unit.unit_knowledge_json = knowledge_data
+                    kp_count = _sync_knowledge_points(db, unit.id, knowledge_data)
+                    total_kp += kp_count
+                    msg = f"✓ {subject}/{grade}/第{unit_num}单元 {unit_name}"
+                else:
+                    not_matched += 1
+                    status = "error"
+                    msg = f"✗ 未匹配: {subject}/{grade}/{semester}/第{unit_num}单元 {unit_name}"
+                    errors.append(msg)
+
+                if idx % 5 == 0 or idx == total_rows:
+                    db.commit()
+                    yield {"event": "message", "data": json.dumps({
+                        "type": "progress",
+                        "current": idx,
+                        "total": total_rows,
+                        "status": status,
+                        "message": msg
+                    }, ensure_ascii=False)}
+                    await asyncio.sleep(0.02)
+                elif idx % 1 == 0:
+                    yield {"event": "message", "data": json.dumps({
+                        "type": "progress",
+                        "current": idx,
+                        "total": total_rows,
+                        "status": status,
+                        "message": msg
+                    }, ensure_ascii=False)}
+
+            db.commit()
+
+            yield {"event": "message", "data": json.dumps({
+                "type": "complete",
+                "current": total_rows,
+                "total": total_rows,
+                "status": "success",
+                "message": f"导入完成！匹配 {matched} 个单元，未匹配 {not_matched} 个，同步知识点 {total_kp} 条",
+                "matched": matched,
+                "not_matched": not_matched,
+                "total_kp": total_kp,
+                "errors": errors[:20]
+            }, ensure_ascii=False)}
+
+        except Exception as e:
+            import traceback
+            yield {"event": "message", "data": json.dumps({
+                "type": "error",
+                "current": 0,
+                "total": 0,
+                "status": "error",
+                "message": f"导入失败: {str(e)}",
+                "detail": traceback.format_exc()
+            }, ensure_ascii=False)}
+
+    return EventSourceResponse(event_generator())
+
+
+@router.post("/clear-knowledge-8modules")
+def clear_knowledge_8modules(
+    data: dict,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    version_id = data.get('version_id')
+    grade_id = data.get('grade_id')
+    subject_id = data.get('subject_id')
+    semester_id = data.get('semester_id')
+
+    query = db.query(Unit)
     if semester_id:
-        query = query.filter(Question.semester_id == semester_id)
-    if unit_id:
-        query = query.filter(Question.unit_id == unit_id)
+        query = query.filter(Unit.semester_id == semester_id)
+    elif subject_id:
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id == subject_id).all()]
+        query = query.filter(Unit.semester_id.in_(semester_ids))
+    elif grade_id:
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id == grade_id).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        query = query.filter(Unit.semester_id.in_(semester_ids))
+    elif version_id:
+        grade_ids = [g.id for g in db.query(Grade).filter(Grade.version_id == version_id).all()]
+        subject_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id.in_(grade_ids)).all()]
+        semester_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(subject_ids)).all()]
+        query = query.filter(Unit.semester_id.in_(semester_ids))
 
-    count = query.count()
-    query.delete()
+    units = query.all()
+    cleared_count = 0
+    for unit in units:
+        if unit.unit_knowledge_json:
+            unit.unit_knowledge_json = None
+            cleared_count += 1
+
     db.commit()
-
-    return {"deleted": count, "message": f"成功删除 {count} 道题目"}
+    return {"message": f"清除完成，共清除{cleared_count}个单元的8模块知识"}

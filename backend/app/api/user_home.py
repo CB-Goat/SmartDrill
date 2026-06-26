@@ -12,6 +12,8 @@ from docx.oxml import OxmlElement
 from io import BytesIO
 from urllib.parse import quote
 
+from app.api.knowledge_import import generate_unit_word_doc
+
 router = APIRouter(prefix="/user", tags=["用户首页"])
 
 GRADE_ORDER = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '初一', '七年级', '初二', '八年级', '初三', '九年级']
@@ -173,6 +175,7 @@ def get_home_data(
         units_list = []
         for unit in all_units:
             has_knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit.id).first() is not None
+            has_8modules = unit.unit_knowledge_json is not None and isinstance(unit.unit_knowledge_json, dict) and bool(unit.unit_knowledge_json)
             has_exam = db.query(ExamPoint).filter(ExamPoint.unit_id == unit.id).first() is not None
             review_downloaded = db.query(Order).filter(
                 Order.user_id == user.id,
@@ -190,6 +193,7 @@ def get_home_data(
                 "unit_number": unit.unit_number,
                 "semester_name": target_semester.name,
                 "has_knowledge": has_knowledge,
+                "has_8modules": has_8modules,
                 "has_exam": has_exam,
                 "review_downloaded": review_downloaded,
                 "practice_downloaded": practice_downloaded
@@ -226,100 +230,18 @@ def get_unit_word(
     subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
     grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
     
-    knowledge = db.query(KnowledgePoint).filter(KnowledgePoint.unit_id == unit_id).first()
     exam_points = db.query(ExamPoint).filter(ExamPoint.unit_id == unit_id).all()
     
-    doc = Document()
-    
-    style = doc.styles['Normal']
-    style.font.name = '宋体'
-    style.font.size = Pt(12)
-    style._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    doc = generate_unit_word_doc(
+        unit=unit,
+        semester=semester,
+        subject=subject,
+        grade=grade,
+        unit_knowledge_json=unit.unit_knowledge_json,
+        exam_points=exam_points
+    )
     
     title_text = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name}"
-    
-    title = doc.add_paragraph()
-    title_run = title.add_run(title_text)
-    title_run.font.size = Pt(18)
-    title_run.font.bold = True
-    title_run.font.name = '宋体'
-    title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    subtitle = doc.add_paragraph()
-    subtitle_run = subtitle.add_run("知识点")
-    subtitle_run.font.size = Pt(16)
-    subtitle_run.font.bold = True
-    subtitle_run.font.color.rgb = RGBColor(0, 102, 204)
-    subtitle_run.font.name = '宋体'
-    subtitle_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    if knowledge and knowledge.content:
-        format_content(doc, knowledge.content)
-    else:
-        p = doc.add_paragraph()
-        run = p.add_run("暂无知识点内容")
-        run.font.color.rgb = RGBColor(153, 153, 153)
-    
-    doc.add_page_break()
-    
-    subtitle2 = doc.add_paragraph()
-    subtitle2_run = subtitle2.add_run("考点")
-    subtitle2_run.font.size = Pt(16)
-    subtitle2_run.font.bold = True
-    subtitle2_run.font.color.rgb = RGBColor(0, 102, 204)
-    subtitle2_run.font.name = '宋体'
-    subtitle2_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-    subtitle2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    if exam_points:
-        for idx, ep in enumerate(exam_points, 1):
-            p = doc.add_paragraph()
-            
-            tab_stops = p.paragraph_format.tab_stops
-            tab_stops.add_tab_stop(Inches(2.5), WD_TAB_ALIGNMENT.CENTER)
-            tab_stops.add_tab_stop(Inches(5.5), WD_TAB_ALIGNMENT.RIGHT)
-            
-            title_run = p.add_run(f"{idx}. {ep.title}")
-            title_run.font.size = Pt(14)
-            title_run.font.bold = True
-            title_run.font.name = '宋体'
-            title_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-            
-            p.add_run('\t')
-            
-            if ep.exam_types:
-                types_run = p.add_run(f"{{{ep.exam_types}}}")
-                types_run.font.size = Pt(12)
-                types_run.font.name = '宋体'
-                types_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-                types_run.font.color.rgb = RGBColor(255, 105, 180)
-            
-            p.add_run('\t')
-            
-            if ep.exam_frequency:
-                freq_text = ep.exam_frequency.value
-                freq_run = p.add_run(f"[{freq_text}]")
-                freq_run.font.size = Pt(12)
-                freq_run.font.name = '宋体'
-                freq_run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
-                if freq_text == '必考':
-                    freq_run.font.color.rgb = RGBColor(255, 0, 0)
-                elif freq_text == '常考':
-                    freq_run.font.color.rgb = RGBColor(255, 153, 0)
-                else:
-                    freq_run.font.color.rgb = RGBColor(0, 153, 0)
-            
-            if ep.content:
-                format_content(doc, ep.content)
-            
-            doc.add_paragraph()
-    else:
-        p = doc.add_paragraph()
-        run = p.add_run("暂无考点内容")
-        run.font.color.rgb = RGBColor(153, 153, 153)
-    
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
