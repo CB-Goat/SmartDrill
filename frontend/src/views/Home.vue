@@ -223,7 +223,7 @@ async function previewUnit(unit: any) {
         await renderAsync(blob, previewContainer.value, undefined, {
           className: 'docx-preview-wrapper',
           inWrapper: true,
-          ignoreWidth: false,
+          ignoreWidth: true,
           ignoreHeight: false,
           ignoreFonts: false,
           breakPages: true,
@@ -577,28 +577,29 @@ async function downloadUnit() {
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 16px;
   overflow-y: auto;
   flex: 1;
   background: #f0f0f0;
-  display: flex;
-  justify-content: center;
-  zoom: 0.6;
 }
 
 .modal-body :deep(.docx-preview-wrapper) {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   margin: 0 auto;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .modal-body :deep(.docx-wrapper) {
   background: transparent;
+  width: 100% !important;
 }
 
 .modal-body :deep(section.docx) {
   box-shadow: none;
   margin-bottom: 20px;
+  width: 100% !important;
 }
 
 .modal-footer {
