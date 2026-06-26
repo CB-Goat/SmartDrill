@@ -222,27 +222,102 @@ def get_difficulties(admin: User = Depends(get_current_admin), db: Session = Dep
     return db.query(Difficulty).all()
 
 @router.get("/questions")
-def get_questions(unit_id: int = None, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+def get_questions(
+    unit_id: int = None,
+    version_id: int = None,
+    grade_id: int = None,
+    subject_id: int = None,
+    semester_id: int = None,
+    question_type_id: int = None,
+    difficulty_id: int = None,
+    page: int = None,
+    page_size: int = None,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
     query = db.query(Question)
     if unit_id:
         query = query.filter(Question.unit_id == unit_id)
-    questions = query.all()
+    elif semester_id:
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id == semester_id).all()]
+        query = query.filter(Question.unit_id.in_(unit_ids)) if unit_ids else query.filter(False)
+    elif subject_id:
+        sem_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id == subject_id).all()]
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(sem_ids)).all()] if sem_ids else []
+        query = query.filter(Question.unit_id.in_(unit_ids)) if unit_ids else query.filter(False)
+    elif grade_id:
+        sub_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id == grade_id).all()]
+        sem_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(sub_ids)).all()] if sub_ids else []
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(sem_ids)).all()] if sem_ids else []
+        query = query.filter(Question.unit_id.in_(unit_ids)) if unit_ids else query.filter(False)
+    elif version_id:
+        grade_ids = [g.id for g in db.query(Grade).filter(Grade.version_id == version_id).all()]
+        sub_ids = [s.id for s in db.query(Subject).filter(Subject.grade_id.in_(grade_ids)).all()] if grade_ids else []
+        sem_ids = [s.id for s in db.query(Semester).filter(Semester.subject_id.in_(sub_ids)).all()] if sub_ids else []
+        unit_ids = [u.id for u in db.query(Unit).filter(Unit.semester_id.in_(sem_ids)).all()] if sem_ids else []
+        query = query.filter(Question.unit_id.in_(unit_ids)) if unit_ids else query.filter(False)
+    if question_type_id:
+        query = query.filter(Question.question_type_id == question_type_id)
+    if difficulty_id:
+        query = query.filter(Question.difficulty_id == difficulty_id)
+
+    unit_map = {}
+    def get_unit_info(u_id):
+        if u_id not in unit_map:
+            u = db.query(Unit).filter(Unit.id == u_id).first()
+            if u:
+                sem = db.query(Semester).filter(Semester.id == u.semester_id).first()
+                sub = db.query(Subject).filter(Subject.id == sem.subject_id).first() if sem else None
+                grd = db.query(Grade).filter(Grade.id == sub.grade_id).first() if sub else None
+                unit_map[u_id] = {
+                    'unit_name': u.name,
+                    'semester_name': sem.name if sem else '',
+                    'subject_name': sub.name if sub else '',
+                    'grade_name': grd.name if grd else '',
+                }
+            else:
+                unit_map[u_id] = {'unit_name': '', 'semester_name': '', 'subject_name': '', 'grade_name': ''}
+        return unit_map[u_id]
+
+    use_pagination = page is not None and page_size is not None
+    total = query.count()
+
+    if use_pagination:
+        questions = query.order_by(Question.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    else:
+        questions = query.order_by(Question.id.desc()).all()
+
     result = []
     for q in questions:
+        info = get_unit_info(q.unit_id)
         result.append({
             "id": q.id,
             "content": q.content,
             "answer": q.answer,
             "analysis": q.analysis,
+            "question_json": q.question_json,
             "question_type": q.question_type_obj.name if q.question_type_obj else None,
             "difficulty": q.difficulty_obj.name if q.difficulty_obj else None,
             "exam_point_title": q.exam_point.title if q.exam_point else None,
             "question_type_id": q.question_type_id,
             "difficulty_id": q.difficulty_id,
             "unit_id": q.unit_id,
+            "unit_name": info['unit_name'],
+            "semester_name": info['semester_name'],
+            "subject_name": info['subject_name'],
+            "grade_name": info['grade_name'],
             "knowledge_point_id": q.knowledge_point_id,
             "exam_point_id": q.exam_point_id
         })
+
+    if use_pagination:
+        return {
+            "list": result,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size
+        }
     return result
 
 @router.post("/questions")
