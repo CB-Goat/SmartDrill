@@ -510,7 +510,8 @@ async function generatePaperPreview() {
       unit_name: currentPaperUnit.value.name,
       question_count: paperQuestionCount.value,
       difficulty_counts: { ...difficultyCounts.value },
-      question_type_counts: { ...questionTypeCounts.value }
+      question_type_counts: { ...questionTypeCounts.value },
+      order_id: null
     }
     
     paperConfigVisible.value = false
@@ -570,25 +571,36 @@ async function downloadPaper() {
       return
     }
     
-    userStore.userInfo.points = result.points
-    showToast('下载成功，已扣20积分')
+    paperData.value.order_id = result.order_id
     
-    const params = new URLSearchParams()
-    params.append('question_count', paperData.value.question_count.toString())
+    if (result.saved) {
+      showToast('下载成功（已保存）')
+    } else {
+      userStore.userInfo.points = result.points
+      showToast(`下载成功，已扣${paperData.value.question_count}积分`)
+    }
     
-    Object.entries(paperData.value.difficulty_counts || {}).forEach(([id, count]) => {
-      if (count > 0) {
-        params.append(`difficulty_${id}`, count.toString())
-      }
-    })
-    
-    Object.entries(paperData.value.question_type_counts || {}).forEach(([id, count]) => {
-      if (count > 0) {
-        params.append(`type_${id}`, count.toString())
-      }
-    })
-    
-    const url = `/api/user/paper-word/${paperData.value.unit_id}?${params.toString()}`
+    let url
+    if (result.saved && result.order_id) {
+      url = `/api/user/saved-paper/${result.order_id}`
+    } else {
+      const params = new URLSearchParams()
+      params.append('question_count', paperData.value.question_count.toString())
+      
+      Object.entries(paperData.value.difficulty_counts || {}).forEach(([id, count]) => {
+        if (count > 0) {
+          params.append(`difficulty_${id}`, count.toString())
+        }
+      })
+      
+      Object.entries(paperData.value.question_type_counts || {}).forEach(([id, count]) => {
+        if (count > 0) {
+          params.append(`type_${id}`, count.toString())
+        }
+      })
+      
+      url = `/api/user/paper-word/${paperData.value.unit_id}?${params.toString()}`
+    }
     
     const wordResponse = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + userStore.token }

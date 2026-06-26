@@ -12,6 +12,7 @@ from docx.oxml import OxmlElement
 from io import BytesIO
 from urllib.parse import quote
 import random
+import os
 
 from app.api.knowledge_import import generate_unit_word_doc
 
@@ -258,6 +259,21 @@ def get_unit_word(
         headers={"Content-Disposition": f"attachment; filename=\"{encoded_filename}\""}
     )
 
+def find_existing_paper(db, user_id, unit_id, difficulty_counts, question_type_counts, question_count):
+    orders = db.query(Order).filter(
+        Order.user_id == user_id,
+        Order.order_type == "practice",
+        Order.unit_id == unit_id,
+        Order.question_count == question_count,
+        Order.is_saved == 1
+    ).all()
+
+    for order in orders:
+        if order.difficulty_counts == difficulty_counts and order.question_type_counts == question_type_counts:
+            if order.file_path:
+                return order
+    return None
+
 @router.post("/download-paper/{unit_id}")
 def download_paper(
     unit_id: int,
@@ -266,33 +282,190 @@ def download_paper(
     db: Session = Depends(get_db)
 ):
     question_count = data.get('question_count', 10)
+    difficulty_counts = data.get('difficulty_counts', {})
+    question_type_counts = data.get('question_type_counts', {})
     POINTS_COST = question_count
-    
-    if user.points < POINTS_COST:
-        raise HTTPException(status_code=400, detail="积分不足")
-    
+
     unit = db.query(Unit).filter(Unit.id == unit_id).first()
     if not unit:
         raise HTTPException(status_code=404, detail="单元不存在")
-    
+
+    existing_order = find_existing_paper(db, user.id, unit_id, difficulty_counts, question_type_counts, question_count)
+
+    if existing_order and existing_order.file_path:
+        return {
+            "message": "下载成功（已保存）",
+            "order_id": existing_order.id,
+            "points": user.points,
+            "saved": True
+        }
+
+    if user.points < POINTS_COST:
+        raise HTTPException(status_code=400, detail="积分不足")
+
     user.points -= POINTS_COST
-    
+
     semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
     subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
     grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
-    
+
+    import os
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "papers")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    filename = f"paper_{user.id}_{unit_id}_{question_count}_{existing_order.id if existing_order else 'new'}.docx"
+    filepath = os.path.join(upload_dir, filename)
+
+    params = {"question_count": question_count}
+    params.update({f"difficulty_{k}": v for k, v in difficulty_counts.items()})
+    params.update({f"type_{k}": v for k, v in question_type_counts.items()})
+
+    difficulty_counts_query = {}
+    question_type_counts_query = {}
+    for k, v in difficulty_counts.items():
+        difficulty_counts_query[int(k)] = v
+    for k, v in question_type_counts.items():
+        question_type_counts_query[int(k)] = v
+
+    questions = query_questions_for_paper(db, unit_id, question_count, difficulty_counts_query, question_type_counts_query)
+    doc = generate_paper_word_doc(unit, semester, subject, grade, questions)
+    doc.save(filepath)
+
     title = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} - 单元测试卷（{question_count}题）"
-    
-    order = Order(
-        user_id=user.id,
-        title=title,
-        order_type="practice",
-        points=POINTS_COST
-    )
-    db.add(order)
+
+    if existing_order:
+        existing_order.points = POINTS_COST
+        existing_order.file_path = filepath
+        existing_order.is_saved = 1
+        order = existing_order
+    else:
+        order = Order(
+            user_id=user.id,
+            title=title,
+            order_type="practice",
+            points=POINTS_COST,
+            unit_id=unit_id,
+            difficulty_counts=difficulty_counts,
+            question_type_counts=question_type_counts,
+            question_count=question_count,
+            file_path=filepath,
+            is_saved=1
+        )
+        db.add(order)
+
     db.commit()
-    
-    return {"message": "下载成功", "points": user.points}
+
+    return {"message": "下载成功", "order_id": order.id, "points": user.points, "saved": False}
+
+def query_questions_for_paper(db, unit_id, question_count, difficulty_counts, question_type_counts):
+    import random
+    all_selected = []
+
+    if question_type_counts:
+        for type_id, count in question_type_counts.items():
+            if count <= 0:
+                continue
+
+            query = db.query(Question).filter(
+                Question.unit_id == unit_id,
+                Question.question_type_id == type_id
+            )
+
+            if difficulty_counts:
+                query = query.filter(Question.difficulty_id.in_(difficulty_counts.keys()))
+
+            questions = query.all()
+
+            if not questions:
+                continue
+
+            selected_count = min(count, len(questions))
+            selected = random.sample(questions, selected_count)
+
+            for q in selected:
+                options_list = []
+                if q.options:
+                    try:
+                        import json
+                        options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+                    except:
+                        options_list = []
+
+                all_selected.append({
+                    "content": q.content,
+                    "options": options_list,
+                    "answer": q.answer,
+                    "analysis": q.analysis,
+                    "question_type": q.question_type_obj.name if q.question_type_obj else "",
+                    "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
+                    "question_type_id": q.question_type_id,
+                })
+    else:
+        query = db.query(Question).filter(Question.unit_id == unit_id)
+
+        if difficulty_counts:
+            query = query.filter(Question.difficulty_id.in_(difficulty_counts.keys()))
+
+        questions = query.all()
+
+        if not questions:
+            return []
+
+        selected_count = min(question_count, len(questions))
+        selected = random.sample(questions, selected_count)
+
+        for q in selected:
+            options_list = []
+            if q.options:
+                try:
+                    import json
+                    options_list = json.loads(q.options) if isinstance(q.options, str) else q.options
+                except:
+                    options_list = []
+
+            all_selected.append({
+                "content": q.content,
+                "options": options_list,
+                "answer": q.answer,
+                "analysis": q.analysis,
+                "question_type": q.question_type_obj.name if q.question_type_obj else "",
+                "difficulty": q.difficulty_obj.name if q.difficulty_obj else "",
+                "question_type_id": q.question_type_id,
+            })
+
+    return all_selected
+
+@router.get("/saved-paper/{order_id}")
+def get_saved_paper(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.user_id == user.id,
+        Order.order_type == "practice",
+        Order.is_saved == 1
+    ).first()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="试卷不存在或无权访问")
+
+    if not order.file_path or not os.path.exists(order.file_path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    with open(order.file_path, 'rb') as f:
+        content = f.read()
+
+    unit = db.query(Unit).filter(Unit.id == order.unit_id).first() if order.unit_id else None
+    filename = f"{unit.name if unit else '试卷'}.docx"
+    encoded_filename = quote(filename)
+
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename=\"{encoded_filename}\""}
+    )
 
 @router.post("/download-unit/{unit_id}")
 def download_unit(

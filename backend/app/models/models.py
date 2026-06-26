@@ -50,7 +50,7 @@ class Recharge(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
@@ -58,8 +58,14 @@ class Order(Base):
     points = Column(Integer, nullable=False)
     file_path = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     user = relationship("User", back_populates="orders")
+
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=True)
+    difficulty_counts = Column(JSON, nullable=True)
+    question_type_counts = Column(JSON, nullable=True)
+    question_count = Column(Integer, nullable=True)
+    is_saved = Column(Integer, default=0)
 
 class Version(Base):
     __tablename__ = "versions"
