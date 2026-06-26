@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -596,9 +596,9 @@ def generate_paper_word_doc(unit, semester, subject, grade, questions):
 def get_paper_word(
     unit_id: int,
     question_count: int = 10,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    **kwargs
 ):
     unit = db.query(Unit).filter(Unit.id == unit_id).first()
     if not unit:
@@ -611,7 +611,9 @@ def get_paper_word(
     difficulty_counts = {}
     question_type_counts = {}
     
-    for key, value in kwargs.items():
+    query_params = request.query_params
+    for key in query_params.keys():
+        value = query_params[key]
         if key.startswith('difficulty_'):
             try:
                 diff_id = int(key.split('_')[1])
