@@ -595,8 +595,8 @@ def generate_paper_word_doc(unit, semester, subject, grade, questions):
 @router.get("/paper-word/{unit_id}")
 def get_paper_word(
     unit_id: int,
-    question_count: int = 10,
     request: Request,
+    question_count: int = 10,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
