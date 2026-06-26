@@ -265,7 +265,8 @@ def download_paper(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    POINTS_COST = 20
+    question_count = data.get('question_count', 10)
+    POINTS_COST = question_count
     
     if user.points < POINTS_COST:
         raise HTTPException(status_code=400, detail="积分不足")
@@ -274,16 +275,13 @@ def download_paper(
     if not unit:
         raise HTTPException(status_code=404, detail="单元不存在")
     
-    question_count = data.get('question_count', 10)
-    difficulty_id = data.get('difficulty_id')
-    
     user.points -= POINTS_COST
     
     semester = db.query(Semester).filter(Semester.id == unit.semester_id).first()
     subject = db.query(Subject).filter(Subject.id == semester.subject_id).first() if semester else None
     grade = db.query(Grade).filter(Grade.id == subject.grade_id).first() if subject else None
     
-    title = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} - 单元测试卷"
+    title = f"{grade.name if grade else ''} {subject.name if subject else ''} {semester.name if semester else ''} - {unit.name} - 单元测试卷（{question_count}题）"
     
     order = Order(
         user_id=user.id,

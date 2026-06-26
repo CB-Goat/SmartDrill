@@ -126,7 +126,7 @@
         </div>
         <div class="modal-body paper-config-body">
           <div class="config-item">
-            <label>试卷总题数：{{ totalSelectedCount }} / {{ paperQuestionCount }}</label>
+            <label>试卷总题数：{{ totalSelectedCount }} / {{ paperQuestionCount }} <span class="points-cost">（消耗 {{ paperQuestionCount }} 积分）</span></label>
             <div class="qty-selector">
               <button class="qty-btn" @click="paperQuestionCount > 1 && adjustTotalQuestionCount(paperQuestionCount - 1)">-</button>
               <input type="number" :value="paperQuestionCount" @change="handleTotalQuestionCountChange" :max="maxQuestionCount" />
@@ -179,7 +179,7 @@
         <div class="modal-body" ref="paperPreviewContainer"></div>
         <div class="modal-footer">
           <button class="btn-close" @click="paperPreviewVisible = false">关闭（×）</button>
-          <button class="btn-primary" @click="downloadPaper">下载试卷（20积分）</button>
+          <button class="btn-primary" @click="downloadPaper">下载试卷（{{ paperData?.question_count || 0 }} 积分）</button>
         </div>
       </div>
     </div>
@@ -284,6 +284,25 @@ async function openPaperConfig(unit: any) {
   }
 }
 
+const BIG_QUESTION_TYPES = ['作文题', '应用题', '解答题', '计算题']
+
+function getQuestionTypeMaxLimit(typeName: string, totalCount: number): number {
+  if (typeName.includes('作文')) {
+    return 1
+  }
+  if (BIG_QUESTION_TYPES.some(t => typeName.includes(t))) {
+    return Math.max(1, Math.floor(totalCount / 5))
+  }
+  return totalCount
+}
+
+function getCommonQuestionTypes() {
+  const commonTypes = ['单选题', '多选题', '填空题', '判断题']
+  return questionTypeList.value.filter(t => 
+    commonTypes.some(ct => t.name.includes(ct))
+  )
+}
+
 function autoDistributeCounts() {
   difficultyCounts.value = {}
   questionTypeCounts.value = {}
@@ -301,13 +320,37 @@ function autoDistributeCounts() {
   }
   
   if (questionTypeList.value.length > 0) {
-    const avg = Math.floor(count / questionTypeList.value.length)
-    const remainder = count % questionTypeList.value.length
-    
-    questionTypeList.value.forEach((t, index) => {
-      const maxAllowed = Math.min(t.count, index < remainder ? avg + 1 : avg)
-      questionTypeCounts.value[t.id] = maxAllowed > 0 ? maxAllowed : 0
+    questionTypeList.value.forEach(t => {
+      questionTypeCounts.value[t.id] = 0
     })
+    
+    let remaining = count
+    
+    const bigTypes = questionTypeList.value.filter(t => 
+      BIG_QUESTION_TYPES.some(bt => t.name.includes(bt)) || t.name.includes('作文')
+    )
+    
+    bigTypes.forEach(t => {
+      const maxLimit = getQuestionTypeMaxLimit(t.name, count)
+      const maxAllowed = Math.min(t.count, maxLimit)
+      const assignCount = Math.min(remaining, maxAllowed)
+      questionTypeCounts.value[t.id] = assignCount
+      remaining -= assignCount
+    })
+    
+    const commonTypes = questionTypeList.value.filter(t => 
+      !BIG_QUESTION_TYPES.some(bt => t.name.includes(bt)) && !t.name.includes('作文')
+    )
+    
+    if (commonTypes.length > 0 && remaining > 0) {
+      const avg = Math.floor(remaining / commonTypes.length)
+      const remainder = remaining % commonTypes.length
+      
+      commonTypes.forEach((t, index) => {
+        const maxAllowed = Math.min(t.count - (questionTypeCounts.value[t.id] || 0), index < remainder ? avg + 1 : avg)
+        questionTypeCounts.value[t.id] = (questionTypeCounts.value[t.id] || 0) + (maxAllowed > 0 ? maxAllowed : 0)
+      })
+    }
   }
 }
 
@@ -347,17 +390,80 @@ function getQuestionTypeCount(id: number) {
 
 function setQuestionTypeCount(id: number, count: number) {
   const qt = questionTypeList.value.find(t => t.id === id)
-  const maxAllowed = qt ? qt.count : 0
+  if (!qt) return
+  
+  const maxLimit = getQuestionTypeMaxLimit(qt.name, paperQuestionCount.value)
+  const maxAllowed = Math.min(qt.count, maxLimit)
   const adjusted = Math.max(0, Math.min(count, maxAllowed))
+  
+  const diff = adjusted - (questionTypeCounts.value[id] || 0)
   questionTypeCounts.value[id] = adjusted
+  
+  if (diff !== 0) {
+    redistributeQuestionTypeCount(diff, id)
+  }
 }
 
 function adjustQuestionTypeCount(id: number, delta: number) {
   const current = questionTypeCounts.value[id] || 0
   const qt = questionTypeList.value.find(t => t.id === id)
-  const maxAllowed = qt ? qt.count : 0
+  if (!qt) return
+  
+  const maxLimit = getQuestionTypeMaxLimit(qt.name, paperQuestionCount.value)
+  const maxAllowed = Math.min(qt.count, maxLimit)
   const newCount = Math.max(0, Math.min(current + delta, maxAllowed))
+  
+  const diff = newCount - current
   questionTypeCounts.value[id] = newCount
+  
+  if (diff !== 0) {
+    redistributeQuestionTypeCount(diff, id)
+  }
+}
+
+function redistributeQuestionTypeCount(diff: number, excludeId: number) {
+  if (diff === 0) return
+  
+  const commonTypes = getCommonQuestionTypes().filter(t => t.id !== excludeId)
+  
+  if (commonTypes.length === 0) {
+    commonTypes.push(...questionTypeList.value.filter(t => t.id !== excludeId))
+  }
+  
+  if (commonTypes.length === 0) return
+  
+  const absDiff = Math.abs(diff)
+  
+  if (diff < 0) {
+    let remaining = absDiff
+    
+    commonTypes.forEach(t => {
+      if (remaining <= 0) return
+      
+      const maxLimit = getQuestionTypeMaxLimit(t.name, paperQuestionCount.value)
+      const available = Math.min(t.count, maxLimit) - (questionTypeCounts.value[t.id] || 0)
+      const add = Math.min(remaining, available)
+      
+      if (add > 0) {
+        questionTypeCounts.value[t.id] = (questionTypeCounts.value[t.id] || 0) + add
+        remaining -= add
+      }
+    })
+  } else {
+    let remaining = absDiff
+    
+    commonTypes.forEach(t => {
+      if (remaining <= 0) return
+      
+      const current = questionTypeCounts.value[t.id] || 0
+      const remove = Math.min(remaining, current)
+      
+      if (remove > 0) {
+        questionTypeCounts.value[t.id] = current - remove
+        remaining -= remove
+      }
+    })
+  }
 }
 
 async function generatePaperPreview() {
@@ -998,6 +1104,12 @@ async function downloadUnit() {
   background: #e6f7ff;
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.points-cost {
+  font-size: 13px;
+  color: #ff6b6b;
+  font-weight: bold;
 }
 
 .paper-config-modal {
