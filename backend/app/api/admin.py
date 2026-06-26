@@ -313,10 +313,15 @@ def get_questions(
     if use_pagination:
         return {
             "list": result,
+            "data": result,
+            "rows": result,
+            "items": result,
+            "records": result,
             "total": total,
             "page": page,
             "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size
+            "total_pages": (total + page_size - 1) // page_size,
+            "totalPages": (total + page_size - 1) // page_size,
         }
     return result
 
