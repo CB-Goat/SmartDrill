@@ -63,6 +63,11 @@ class Order(Base):
     order_type = Column(String(50), nullable=False)
     points = Column(Integer, nullable=False)
     file_path = Column(String(255))
+    unit_id = Column(Integer, ForeignKey("units.id"))
+    question_count = Column(Integer)
+    difficulty_counts = Column(JSON)
+    question_type_counts = Column(JSON)
+    is_saved = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="orders")

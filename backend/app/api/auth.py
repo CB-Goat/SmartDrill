@@ -12,29 +12,38 @@ REGISTER_BONUS_POINTS = 100
 
 @router.post("/register")
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == user_data.username).first():
-        raise HTTPException(status_code=400, detail="用户名已存在")
-    
-    user = User(
-        username=user_data.username,
-        password=get_password_hash(user_data.password),
-        phone=user_data.phone,
-        points=REGISTER_BONUS_POINTS
-    )
-    db.add(user)
-    db.flush()
-    
-    order = Order(
-        user_id=user.id,
-        title="新用户注册奖励",
-        order_type="reward",
-        points=REGISTER_BONUS_POINTS
-    )
-    db.add(order)
-    db.commit()
-    db.refresh(user)
-    
-    return {"message": f"注册成功，赠送{REGISTER_BONUS_POINTS}积分", "points": user.points}
+    try:
+        if db.query(User).filter(User.username == user_data.username).first():
+            raise HTTPException(status_code=400, detail="用户名已存在")
+        
+        user = User(
+            username=user_data.username,
+            password=get_password_hash(user_data.password),
+            phone=user_data.phone,
+            points=REGISTER_BONUS_POINTS
+        )
+        db.add(user)
+        db.flush()
+        
+        order = Order(
+            user_id=user.id,
+            title="新用户注册奖励",
+            order_type="reward",
+            points=REGISTER_BONUS_POINTS
+        )
+        db.add(order)
+        db.commit()
+        db.refresh(user)
+        
+        return {"message": f"注册成功，赠送{REGISTER_BONUS_POINTS}积分", "points": user.points}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        print(f"注册错误: {error_detail}")
+        raise HTTPException(status_code=500, detail=f"注册失败: {str(e)}")
 
 @router.post("/login", response_model=Token)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
