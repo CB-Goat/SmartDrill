@@ -18,40 +18,29 @@
 
       <div class="qr-container">
         <img src="/wechat_qr.jpg" alt="公众号二维码" class="qr-img" />
-        <div class="qr-tip">扫码关注"趣学有方"</div>
+        <div class="qr-tip">扫码关注"鸡娃有方"</div>
       </div>
 
       <div class="step">
         <div class="step-number">2</div>
         <div class="step-content">
-          <div class="step-text">进入公众号，点击底部"订阅充值"菜单</div>
+          <div class="step-text">进入公众号，点击底部"订阅充值"菜单，获取付款二维码</div>
         </div>
       </div>
 
       <div class="step">
         <div class="step-number">3</div>
         <div class="step-content">
-          <div class="step-text">选择充值金额，获取付款二维码</div>
+          <div class="step-text">选择订阅充值产品，完成付款</div>
         </div>
       </div>
 
       <div class="step">
         <div class="step-number">4</div>
         <div class="step-content">
-          <div class="step-text">扫码付款完成充值，积分自动到账</div>
+          <div class="step-text">系统增加用户积分（1元兑换100积分）</div>
         </div>
       </div>
-
-      <div class="packages-title">充值套餐</div>
-      
-      <van-grid :column-num="3" class="packages-grid">
-        <van-grid-item v-for="item in packages" :key="item.amount">
-          <template #text>
-            <div class="pkg-amount">{{ item.amount }}元</div>
-            <div class="pkg-points">{{ item.points }}积分</div>
-          </template>
-        </van-grid-item>
-      </van-grid>
 
       <div class="tip">
         <van-icon name="info-o" />
@@ -62,18 +51,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
-const packages = ref([
-  { amount: 10, points: 1000 },
-  { amount: 50, points: 5000 },
-  { amount: 100, points: 10000 },
-  { amount: 200, points: 20000 },
-  { amount: 500, points: 50000 },
-  { amount: 1000, points: 100000 }
-])
 
 onMounted(() => {
   userStore.fetchUserInfo()
@@ -143,31 +124,6 @@ onMounted(() => {
   margin-top: 12px;
   font-size: 14px;
   color: #646566;
-}
-
-.packages-title {
-  font-size: 16px;
-  font-weight: bold;
-  margin: 24px 0 12px;
-  color: #323233;
-}
-
-.packages-grid {
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.pkg-amount {
-  font-size: 16px;
-  font-weight: bold;
-  color: #323233;
-}
-
-.pkg-points {
-  font-size: 13px;
-  color: #ee0a24;
-  margin-top: 4px;
 }
 
 .tip {
