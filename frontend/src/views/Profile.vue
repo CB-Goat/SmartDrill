@@ -12,11 +12,24 @@
         <van-cell title="孩子年级" :value="childGradeName || '未设置'" is-link @click="showGradePicker = true" />
       </van-cell-group>
       
-      <van-cell-group inset style="margin-top: 16px">
+      <van-cell-group inset>
         <van-cell title="充值" is-link to="/recharge" />
+        <van-cell 
+          :title="wechatBound ? '微信已绑定' : '绑定微信'" 
+          :value="wechatNickname || ''"
+          is-link 
+          @click="handleWechatBind" 
+        />
         <van-cell title="修改密码" is-link @click="showPasswordDialog = true" />
         <van-cell title="我的订单" is-link to="/orders" />
       </van-cell-group>
+      
+      <van-dialog v-model:show="showBindDialog" title="绑定微信" show-cancel-button @confirm="submitBindCode">
+        <van-field v-model="bindCode" placeholder="请输入6位绑定码" maxlength="6" />
+        <p style="padding: 0 16px 16px; color: #999; font-size: 13px;">
+          关注公众号「智练通」，发送「绑定」获取绑定码
+        </p>
+      </van-dialog>
       
       <div style="margin-top: 24px; padding: 0 16px">
         <van-button block type="danger" @click="handleLogout">退出登录</van-button>
@@ -62,10 +75,15 @@ const active = ref(2)
 const showPhoneDialog = ref(false)
 const showPasswordDialog = ref(false)
 const showGradePicker = ref(false)
+const showBindDialog = ref(false)
 
 const newPhone = ref('')
 const oldPassword = ref('')
 const newPassword = ref('')
+const bindCode = ref('')
+
+const wechatBound = ref(false)
+const wechatNickname = ref('')
 
 const grades = ref<any[]>([])
 const childGradeName = ref('')
@@ -89,7 +107,62 @@ onMounted(async () => {
   await userStore.fetchUserInfo()
   await loadGrades()
   await loadChildGrade()
+  await loadWechatBindStatus()
 })
+
+async function loadWechatBindStatus() {
+  try {
+    const response = await fetch('/api/wechat/bind-status', {
+      headers: { 'Authorization': 'Bearer ' + userStore.token }
+    })
+    const data = await response.json()
+    wechatBound.value = data.is_bound
+    wechatNickname.value = data.nickname
+  } catch (error) {
+    console.error('加载微信绑定状态失败')
+  }
+}
+
+function handleWechatBind() {
+  if (wechatBound.value) {
+    showToast('微信已绑定')
+    return
+  }
+  showBindDialog.value = true
+}
+
+async function submitBindCode() {
+  if (!bindCode.value || bindCode.value.length !== 6) {
+    showToast('请输入6位绑定码')
+    return
+  }
+  
+  try {
+    const response = await fetch('/api/wechat/bind', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + userStore.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ bind_code: bindCode.value })
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok) {
+      showToast(result.message)
+      wechatBound.value = true
+      wechatNickname.value = result.nickname
+      showBindDialog.value = false
+      bindCode.value = ''
+      await userStore.fetchUserInfo()
+    } else {
+      showToast(result.detail || '绑定失败')
+    }
+  } catch (error) {
+    showToast('绑定失败')
+  }
+}
 
 async function loadGrades() {
   try {

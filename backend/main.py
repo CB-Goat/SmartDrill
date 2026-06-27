@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, user, subjects, materials, admin, admin_auth, knowledge_import, user_home
+from app.api import auth, user, subjects, materials, admin, admin_auth, knowledge_import, user_home, wechat
 from app.database import engine, Base
 import os
 
@@ -24,6 +24,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(admin_auth.router, prefix="/api")
 app.include_router(knowledge_import.router, prefix="/api")
 app.include_router(user_home.router, prefix="/api")
+app.include_router(wechat.router, prefix="/api")
 
 @app.get("/")
 def root():
