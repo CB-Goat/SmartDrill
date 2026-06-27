@@ -1,7 +1,10 @@
 <template>
   <div class="login-page">
     <div class="login-header">
-      <div class="logo">智练通</div>
+      <div class="logo-container">
+        <img src="/logo.svg" alt="智练通" class="logo-img" />
+        <div class="logo-text">智练通</div>
+      </div>
       <div class="slogan">管理后台</div>
     </div>
     
@@ -77,10 +80,22 @@ async function onSubmit() {
   margin-bottom: 40px;
 }
 
-.logo {
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.logo-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+}
+
+.logo-text {
   font-size: 36px;
   font-weight: bold;
-  margin-bottom: 8px;
 }
 
 .slogan {
