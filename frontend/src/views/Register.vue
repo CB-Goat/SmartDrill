@@ -3,6 +3,9 @@
     <van-nav-bar title="注册" left-arrow @click-left="$router.back()" />
     
     <van-form @submit="onSubmit" style="margin: 16px">
+      <div class="register-banner">
+        🎁 新用户注册即送 100 积分
+      </div>
       <van-cell-group inset>
         <van-field v-model="form.username" name="username" label="用户名" placeholder="请输入用户名" :rules="[{ required: true, message: '请填写用户名' }]" />
         <van-field v-model="form.password" type="password" name="password" label="密码" placeholder="请输入密码" :rules="[{ required: true, message: '请填写密码' }]" />
@@ -36,7 +39,20 @@ async function onSubmit() {
     return
   }
   await api.register(form)
-  showSuccessToast('注册成功')
+  showSuccessToast('注册成功，赠送100积分')
   router.push('/login')
 }
 </script>
+
+<style scoped>
+.register-banner {
+  text-align: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #fff5e6 0%, #ffecd2 100%);
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #ff6b35;
+  margin-bottom: 16px;
+}
+</style>
