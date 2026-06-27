@@ -2,7 +2,7 @@
   <div class="login-page">
     <div class="login-header">
       <div class="logo-container">
-        <img src="/logo.png" alt="智练通" class="logo-img" />
+        <img src="/logo_original.jpg" alt="智练通" class="logo-img" />
         <div class="logo-text">智练通</div>
       </div>
       <div class="slogan">让学习更高效</div>
